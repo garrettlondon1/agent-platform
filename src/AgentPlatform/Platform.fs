@@ -37,6 +37,18 @@ type Rollout =
     /// Everything exactly as written.
     | Enforce
 
+/// The "Store local sessions in the Cloud" policy (session-data.md, about-remote-control.md). Unconfigured by default,
+/// which keeps sessions on the machine only.
+type SessionStorage =
+    /// Sessions stay under ~/.copilot/session-state on each machine; no sync, no remote control.
+    | LocalOnly
+    /// CLI and Copilot app sessions sync to each user's own GitHub account (history queries, /chronicle, resume anywhere).
+    | ViewFromCloud
+    /// Syncing plus remote control of a running session from another device (narrow it with policy remoteControl).
+    | ViewAndControl
+
+    member s.Text = match s with LocalOnly -> "Disabled" | ViewFromCloud -> "View from cloud" | ViewAndControl -> "View and control"
+
 /// Who deploys the rendered repositories, and is therefore the ONLY actor allowed to change them.
 type Deployer =
     /// The platform's GitHub App (production). Nobody else can push to a rendered repository, and every
@@ -102,6 +114,11 @@ type Platform = {
     OrganizationSkills: Skill list
     /// Organization team that owns .github-private in CODEOWNERS (omitted when unset).
     AdminTeam: string option
+    /// What MDM and file-based delivery enforce on devices (default: the same policy as the server). Device settings win
+    /// key by key over server settings; permissions and sandbox combine most-restrictively.
+    DevicePolicy: Policy option
+    /// "Store local sessions in the Cloud".
+    SessionStorage: SessionStorage option
     /// Rollout stage (default Enforce). Start new platforms at Observe.
     Rollout: Rollout
     /// Who may change the rendered repositories (default OrganizationOwners).
@@ -118,7 +135,7 @@ let private nothing = {
     Policy = empty; Teams = []; Standards = []; Mcp = { Servers = []; Blocked = []; RegistryUrl = None; RegistryMode = DiscoveryOnly; AllowBuiltIns = true }
     Hooks = { Rules = []; Capture = None; TimeoutSec = 5; CaptureVia = HttpHooks }; Plugins = []; Agents = []; Workflows = []
     GitHub = { Rulesets = []; ContentExclusion = []; CloudAgent = defaultCloudAgent; AgentVariables = []; AgentSecrets = []; OrgInstructions = true }
-    AgenticDefaults = []; AgenticPolicy = []; HookTokenVariable = None; HookPilotTeams = []; HostCaPath = None; OrganizationSkills = []; AdminTeam = None; Rollout = Enforce; DeployedBy = OrganizationOwners
+    AgenticDefaults = []; AgenticPolicy = []; HookTokenVariable = None; HookPilotTeams = []; HostCaPath = None; OrganizationSkills = []; AdminTeam = None; DevicePolicy = None; SessionStorage = None; Rollout = Enforce; DeployedBy = OrganizationOwners
     DefinitionRepo = "agent-platform"; Version = "1.0.0"
 }
 
@@ -148,6 +165,11 @@ type PlatformBuilder() =
     /// The organization team (slug) that owns the governance repositories in CODEOWNERS.
     [<CustomOperation "administeredBy">] member _.Admins(p: Platform, team: string) = { p with AdminTeam = Some team }
     [<CustomOperation "definitionRepo">] member _.DefinitionRepo(p: Platform, r: string) = { p with DefinitionRepo = r }
+    /// A separate policy for devices (Intune / Jamf / file). GitHub recommends MDM for non-negotiable security settings and
+    /// server-managed settings for things that change; device-only keys (onlySignInTo, sandbox learning) belong here.
+    [<CustomOperation "onDevices">] member _.Devices(p: Platform, pol: Policy) = { p with DevicePolicy = Some pol }
+    /// "Store local sessions in the Cloud": LocalOnly, ViewFromCloud or ViewAndControl.
+    [<CustomOperation "sessionsInCloud">] member _.Sessions(p: Platform, s: SessionStorage) = { p with SessionStorage = Some s }
     [<CustomOperation "governedBy">] member _.Policy(p: Platform, pol) = { p with Policy = pol }
     [<CustomOperation "team">] member _.Team(p: Platform, name, enterpriseTeams, pol) = { p with Teams = p.Teams @ [ { Name = name; EnterpriseTeams = enterpriseTeams; Policy = pol; Plugins = [] } ] }
     /// Typed team override files: `teams [ teamOverride { ... }; teamOverride { ... } ]`.
@@ -235,6 +257,7 @@ let staged (p: Platform) : Platform =
         (own |> List.filter (fun r -> protection |> List.forall (fun x -> x.Name <> r.Name))) @ protection
     { p with
         Policy = stagePolicy p.Rollout p.Policy
+        DevicePolicy = p.DevicePolicy |> Option.map (stagePolicy p.Rollout)
         Teams =
             let pilot =
                 match p.HookPilotTeams with
@@ -308,6 +331,9 @@ let resolvedPolicy (p: Platform) : Policy =
     let resolved = { pol with EnabledPlugins = enabled; Marketplaces = marketplaces; StrictMarketplaces = strict; McpAllow = mcpAllow; McpDeny = mcpDeny; Telemetry = telemetry }
     if p.Rollout = Observe then { resolved with McpAllow = None; StrictMarketplaces = None } else resolved
 
+/// What MDM and file-based delivery put on devices.
+let devicePolicy (p: Platform) = match p.DevicePolicy with Some d -> flatten d | None -> flatten (resolvedPolicy p)
+
 let effectivePolicy (p: Platform) (team: string option) =
     let p = staged p
     let teamPolicy = team |> Option.bind (fun t -> p.Teams |> List.tryFind (fun x -> x.Name = t)) |> Option.map _.Policy
@@ -345,6 +371,27 @@ let validate (p: Platform) : string list = [
         $"platform: definitionRepo '{p.DefinitionRepo}' is also a rendered repository; keep the definition in its own repository."
     let pol = resolvedPolicy p
     yield! validateEnterprise pol
+    match p.DevicePolicy with
+    | Some d ->
+        // Docs: allow lists intersect across sources and a source without one adds no restriction, so device deny rules
+        // are fine when the server policy declares the allow list.
+        let serverAllows = pol.Allow.IsSome
+        yield!
+            validateEnterprise d
+            |> List.filter (fun m -> not (serverAllows && m.StartsWith "permissions: deny/ask rules without an allow list"))
+            |> List.map (fun m -> "onDevices: " + m)
+    | None -> ()
+    if pol.ForceLoginOrgs.IsSome then
+        "governedBy: onlySignInTo must reach a device before its first sign-in, so the server channel drops it. Put it in onDevices (policy { ... })."
+    match pol.Sandbox with
+    | Some(Enforced s | Overridable s) when s.LearningMode.IsSome ->
+        "governedBy: sandbox learning is read only from native MDM. Put it in onDevices (policy { ... })."
+    | _ -> ()
+    let remote = (p.DevicePolicy |> Option.bind _.RemoteControl) |> Option.orElse pol.RemoteControl
+    match p.SessionStorage, remote with
+    | Some s, Some(RemoteEnabled | RequireSso _) when s <> ViewAndControl ->
+        $"sessionsInCloud {s}: remote control is allowed by remoteControl but needs 'Store local sessions in the Cloud' = View and control."
+    | _ -> ()
     for t in p.Teams do
         yield! validateTeam pol t.Name t.Policy
         yield! validateSandboxPaths $"teams/{t.Name}.json" t.Policy

@@ -610,3 +610,58 @@ let ``whatif resolves enterprise team slugs with or without ent prefix`` () =
     let none, noFiles, _ = effectiveForMember p [ "unknown" ]
     Assert.Empty(noFiles)
     Assert.Equal(Some(Enforced [ shell "rm -rf *" ]), none.Deny)
+
+// ---------------------------------------------------------------------------
+// Devices (MDM / file), session storage, and the README's complete example
+// ---------------------------------------------------------------------------
+
+let private withDevices =
+    { sample with
+        DevicePolicy = Some(policy { noBypassMode; deny [ read "~/.ssh/**" ]; onlySignInTo [ "acme" ]; sandboxed (sandbox { required; learning RecordAndAllow }) })
+        SessionStorage = Some ViewFromCloud }
+
+[<Fact>]
+let ``devices get their own policy, with device-only keys, and policy hooks through the registry`` () =
+    Assert.Empty(validate withDevices)
+    let rendered = Render.all withDevices published
+    let text path = rendered |> List.find (fun f -> f.Path = path) |> _.Content
+    let deviceFile = JsonNode.Parse(text "workstation/windows/ProgramFiles/GitHubCopilot/managed-settings.json")
+    Assert.Equal("acme", string (at [ K "forceLoginOrgs"; I 0 ] deviceFile))
+    Assert.Null(at [ K "sandbox"; K "learningMode" ] deviceFile)
+    Assert.Null((JsonNode.Parse(text ".github-private/copilot/managed-settings.json")).["forceLoginOrgs"])
+    let reg = text "workstation/windows/GitHubCopilot-policy.reg"
+    Assert.Contains("\"sandbox.learningMode\"=\"allow\"", reg)
+    Assert.Contains(@"[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\GitHub\Copilot\agent-platform]", reg)
+    Assert.Contains("\"Policy\"=\"{\\\"version\\\":1", reg)
+    let detect = text "workstation/windows/intune/Detect-GitHubCopilotPolicy.ps1"
+    let remediate = text "workstation/windows/intune/Remediate-GitHubCopilotPolicy.ps1"
+    Assert.Contains("exit 1", detect)
+    Assert.Contains("Remove-ItemProperty", remediate)
+    Assert.DoesNotContain(rendered, fun f -> f.Path.StartsWith "workstation/windows" && f.Path.Contains "policy.d")
+    Assert.Contains("chmod 0644", text "workstation/macos/install.sh")
+
+[<Fact>]
+let ``device-only keys and session storage are validated`` () =
+    let serverOnly = { sample with Policy = { everyone with ForceLoginOrgs = Some [ "acme" ] } }
+    Assert.Contains(validate serverOnly, fun m -> m.Contains "onlySignInTo must reach a device")
+    let remote = { sample with SessionStorage = Some ViewFromCloud; Policy = { everyone with RemoteControl = Some(requireSso [ "acme" ]) } }
+    Assert.Contains(validate remote, fun m -> m.Contains "needs 'Store local sessions in the Cloud' = View and control")
+    Assert.Contains(Deploy.manualSteps withDevices, fun m -> m.StartsWith "Store local sessions in the Cloud = View from cloud")
+
+[<Fact>]
+let ``custom graders render as repository scripts`` () =
+    let g = Agents.operationalValue "Minutes saved" "Saved" "minutes" "#!/usr/bin/env bash\necho '[{\"id\":\"m\",\"value\":1}]'"
+    let p = { sample with Workflows = [ { reviewWorkflow with Graders = [ BuiltInGraders; g ] } ] }
+    let rendered = Render.all p published
+    let md = rendered |> List.find (fun f -> f.Path = "agentic-workflows/.github/workflows/review.md") |> _.Content
+    Assert.Contains("run: .github/graders/review-operational-value.sh", md)
+    Assert.Contains(rendered, fun f -> f.Path = "agentic-workflows/.github/graders/review-operational-value.sh")
+
+[<Fact>]
+let ``the README's complete example is the compiled Contoso example, verbatim`` () =
+    let rec root (d: IO.DirectoryInfo) = if IO.File.Exists(IO.Path.Combine(d.FullName, "AgentPlatform.slnx")) then d.FullName else root d.Parent
+    let repo = root (IO.DirectoryInfo AppContext.BaseDirectory)
+    let norm (s: string) = s.Replace("\r\n", "\n").TrimEnd()
+    let example = norm (IO.File.ReadAllText(IO.Path.Combine(repo, "examples", "contoso", "Platform.fs")))
+    let readme = norm (IO.File.ReadAllText(IO.Path.Combine(repo, "README.md")))
+    Assert.True(readme.Contains example, "README.md is out of date: run proof/sync-readme.ps1")

@@ -179,6 +179,8 @@ let definition =
 
         governedBy everyone
         teams [ aiPioneers ]
+        // sessionsInCloud ViewFromCloud                                     // "Store local sessions in the Cloud"
+        // onDevices (policy { noBypassMode; onlySignInTo [ "acme-org" ] })  // Intune / Jamf: non-negotiables on devices
         standards [ engineering ]
         mcpCatalog catalog
         hooks guardrails

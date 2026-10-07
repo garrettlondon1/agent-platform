@@ -3,6 +3,9 @@
 # (marketplace not published) strips those lines in a temporary copy and compiles everything else.
 param([string]$Rendered = (Join-Path $PSScriptRoot "..\.platform"), [switch]$KeepPlugins)
 $ErrorActionPreference = 'Stop'
+# gh-aw checks grader scripts with `bash -n`; on Windows prefer Git's bash over the WSL launcher.
+$gitBash = Join-Path $env:ProgramFiles 'Git\bin'
+if (Test-Path (Join-Path $gitBash 'bash.exe')) { $env:PATH = "$gitBash;$env:PATH" }
 $d = Join-Path $env:TEMP "aw-proof"
 if (Test-Path $d) { Remove-Item -Recurse -Force $d }
 New-Item -ItemType Directory $d | Out-Null

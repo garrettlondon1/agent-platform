@@ -428,8 +428,8 @@ let workflowMarkdown (p: Platform) (w: Workflow) =
                 line $"    description: {yamlString d}"
                 line $"    unit: {u}"
                 line "    direction: higher_is_better"
-                line "    script: |"
-                for l in s.Trim().Split('\n') do line $"      {l.TrimEnd()}"
+                // A repository script works on every gh-aw version (older ones reject inline `script`).
+                line $"    run: .github/graders/{w.Name}-operational-value.sh"
     if not w.Experiments.IsEmpty then
         line "experiments:"
         for x in w.Experiments do
@@ -471,6 +471,10 @@ let agenticWorkflows (p: Platform) = [
     file $"agentic-workflows/.github/workflows/shared/{p.Organization}-governance.md" (governanceImport p)
     for w in p.Workflows do
         file $"agentic-workflows/.github/workflows/{w.Name}.md" (workflowMarkdown p w)
+        for g in w.Graders do
+            match g with
+            | OperationalValue(_, _, _, script) -> file $"agentic-workflows/.github/graders/{w.Name}-operational-value.sh" (script.Trim() + "\n")
+            | BuiltInGraders -> ()
     for a in p.Agents |> List.filter (fun a -> p.Workflows |> List.exists (fun w -> w.Agent = a.Name)) do
         file $"agentic-workflows/.github/agents/{a.Name}.md" (profile p a)
     let defaults =
@@ -515,24 +519,87 @@ let mdmValues (pol: Policy) =
             | v -> kv.Key, text v
     ]
 
+/// Every device artifact. Settings use the documented native locations (deploy-managed-settings.md); policy hooks use the
+/// documented policy hook sources (hooks-reference.md "Policy hooks"):
+///
+///     Windows   settings  HKLM\SOFTWARE\Policies\GitHubCopilot          REG_SZ per key (JSON text for non-strings)
+///               hooks     HKLM\Software\Policies\GitHub\Copilot\<name>  REG_SZ "Policy" = hook JSON  (no files at all)
+///     macOS     settings  com.github.copilot forced preferences (.mobileconfig) or the managed-settings.json file
+///               hooks     /etc/github-copilot/policy.d/*.json, root-owned, not group/world-writable
+///     Linux     settings  /etc/github-copilot/managed-settings.json (root-owned)
+///               hooks     /etc/github-copilot/policy.d/*.json
+///
+/// Intune: the Remediations pair (detect + remediate) re-applies every value and removes values it set before that the
+/// definition no longer sets (never values another MDM policy owns) - self-healing, no Win32 app, no scheduled task.
 let workstation (p: Platform) =
-    let pol = resolvedPolicy p
-    let json = render (toJson (forFile (flatten pol)))
-    let policyHooks = render (hooksJson p "policy-hook" false)
+    let pol = devicePolicy p
+    let json = render (toJson (forFile pol))
+    let hooksDoc = hooksJson p "policy-hook" false
+    let policyHooks = render hooksDoc
+    let policyHooksCompact = hooksDoc.ToJsonString()
+    let hookPolicyName = "agent-platform"
     let mdm = mdmValues pol
     let regEsc (s: string) = s.Replace("\\", "\\\\").Replace("\"", "\\\"")
     let reg =
-        "Windows Registry Editor Version 5.00\r\n\r\n[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\GitHubCopilot]\r\n"
-        + (mdm |> List.map (fun (k, v) -> "\"" + k + "\"=\"" + regEsc v + "\"") |> String.concat "\r\n") + "\r\n"
+        "Windows Registry Editor Version 5.00\r\n\r\n"
+        + "; Adds or updates the platform's values and leaves values other MDM policies own untouched. Removing a setting\r\n"
+        + "; later needs the Intune Remediations pair (it tracks what it wrote) or a \"name\"=- line here.\r\n"
+        + "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\GitHubCopilot]\r\n"
+        + (mdm |> List.map (fun (k, v) -> "\"" + k + "\"=\"" + regEsc v + "\"") |> String.concat "\r\n") + "\r\n\r\n"
+        + "; Machine-wide policy hooks: load before every other hook and cannot be disabled by users.\r\n"
+        + $"[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\GitHub\\Copilot\\{hookPolicyName}]\r\n"
+        + "\"Policy\"=\"" + regEsc policyHooksCompact + "\"\r\n"
     let psEsc (s: string) = s.Replace("'", "''")
-    let ps1 =
-        $"# {banner p}\r\n# Intune remediation / ConfigMgr: GitHub Copilot managed settings (native MDM) + machine-wide policy hooks.\r\n"
-        + "#Requires -RunAsAdministrator\r\n$ErrorActionPreference = 'Stop'\r\n"
-        + "$key = 'HKLM:\\SOFTWARE\\Policies\\GitHubCopilot'\r\nNew-Item -Path $key -Force | Out-Null\r\n$values = [ordered]@{\r\n"
+    let expected =
+        "$settingsKey = 'HKLM:\\SOFTWARE\\Policies\\GitHubCopilot'\r\n"
+        + $"$hooksKey = 'HKLM:\\SOFTWARE\\Policies\\GitHub\\Copilot\\{hookPolicyName}'\r\n"
+        + "$settings = [ordered]@{\r\n"
         + (mdm |> List.map (fun (k, v) -> "  '" + k + "' = '" + psEsc v + "'") |> String.concat "\r\n")
-        + "\r\n}\r\nforeach ($k in $values.Keys) { New-ItemProperty -Path $key -Name $k -Value $values[$k] -PropertyType String -Force | Out-Null }\r\n"
-        + "$policyDir = 'C:\\ProgramData\\GitHub\\Copilot\\policy.d'\r\nNew-Item -ItemType Directory -Force $policyDir | Out-Null\r\n"
-        + "@'\r\n" + policyHooks + "'@ | Set-Content -Encoding utf8 (Join-Path $policyDir '00-agent-platform.json')\r\n"
+        + "\r\n}\r\n"
+        + "$hookPolicy = '" + psEsc policyHooksCompact + "'\r\n"
+        + "# The values this platform wrote last time, so it removes only its own stale settings - never another MDM's.\r\n"
+        + "$stateKey = 'HKLM:\\SOFTWARE\\AgentPlatform\\GitHubCopilot'\r\n"
+        + "$previous = @((Get-ItemProperty -Path $stateKey -Name ManagedKeys -ErrorAction SilentlyContinue).ManagedKeys -split \"`n\" | Where-Object { $_ })\r\n"
+    let header (purpose: string) =
+        $"# {banner p}\r\n# {purpose}\r\n"
+    let detect =
+        header "Intune Remediations - DETECTION. Exit 1 when any GitHub Copilot policy value differs from the definition."
+        + expected
+        + "$drift = @()\r\n"
+        + "foreach ($k in $settings.Keys) {\r\n"
+        + "  $v = (Get-ItemProperty -Path $settingsKey -Name $k -ErrorAction SilentlyContinue).$k\r\n"
+        + "  if ($v -ne $settings[$k]) { $drift += $k }\r\n"
+        + "}\r\n"
+        + "$present = @((Get-Item -Path $settingsKey -ErrorAction SilentlyContinue).Property)\r\n"
+        + "foreach ($k in $previous) { if (-not $settings.Contains($k) -and $present -contains $k) { $drift += \"stale:$k\" } }\r\n"
+        + "if ((Get-ItemProperty -Path $hooksKey -Name Policy -ErrorAction SilentlyContinue).Policy -ne $hookPolicy) { $drift += 'policy hooks' }\r\n"
+        + "if ($drift.Count -gt 0) { Write-Output ('Drift: ' + ($drift -join ', ')); exit 1 }\r\n"
+        + "Write-Output 'Compliant'; exit 0\r\n"
+    let remediate =
+        header "Intune Remediations - REMEDIATION (runs as SYSTEM). Writes the definition's values; removes only values it wrote before."
+        + "$ErrorActionPreference = 'Stop'\r\n"
+        + expected
+        + "New-Item -Path $settingsKey -Force | Out-Null\r\n"
+        + "foreach ($k in $previous) { if (-not $settings.Contains($k)) { Remove-ItemProperty -Path $settingsKey -Name $k -ErrorAction SilentlyContinue } }\r\n"
+        + "foreach ($k in $settings.Keys) { New-ItemProperty -Path $settingsKey -Name $k -Value $settings[$k] -PropertyType String -Force | Out-Null }\r\n"
+        + "New-Item -Path $stateKey -Force | Out-Null\r\n"
+        + "New-ItemProperty -Path $stateKey -Name ManagedKeys -Value (@($settings.Keys) -join \"`n\") -PropertyType String -Force | Out-Null\r\n"
+        + "New-Item -Path $hooksKey -Force | Out-Null\r\n"
+        + "New-ItemProperty -Path $hooksKey -Name Policy -Value $hookPolicy -PropertyType String -Force | Out-Null\r\n"
+        + "Write-Output 'Remediated'\r\n"
+    let install =
+        header "Manual / ConfigMgr install: the same values as the Intune Remediations pair, applied once."
+        + "#Requires -RunAsAdministrator\r\n"
+        + remediate.Substring(remediate.IndexOf("$ErrorActionPreference", StringComparison.Ordinal))
+    let posixInstall (settingsPath: string) =
+        let heredoc (path: string) (content: string) =
+            $"install -d -o root -g wheel -m 0755 \"$(dirname '{path}')\" 2>/dev/null || install -d -o root -g root -m 0755 \"$(dirname '{path}')\"\n"
+            + $"cat > '{path}.tmp' <<'AGENTP_EOF'\n{content.TrimEnd()}\nAGENTP_EOF\n"
+            + $"chown root \"{path}.tmp\" && chmod 0644 \"{path}.tmp\" && mv -f \"{path}.tmp\" \"{path}\"\n"
+        $"#!/bin/sh\n# {banner p}\n# Run as root (Intune macOS shell script, Jamf policy, or configuration management). Copilot rejects\n"
+        + "# managed files that are symlinks, not owned by root, or group/world-writable.\nset -eu\n"
+        + heredoc settingsPath json
+        + heredoc "/etc/github-copilot/policy.d/00-agent-platform.json" policyHooks
     let xml (s: string) = Security.SecurityElement.Escape s
     let mobileconfig =
         let keys = mdm |> List.map (fun (k, v) -> $"          <key>{xml k}</key><string>{xml v}</string>") |> String.concat "\n"
@@ -563,15 +630,19 @@ let workstation (p: Platform) =
     [
         file "workstation/linux/etc/github-copilot/managed-settings.json" json
         file "workstation/linux/etc/github-copilot/policy.d/00-agent-platform.json" policyHooks
+        file "workstation/linux/install.sh" (posixInstall "/etc/github-copilot/managed-settings.json")
         file "workstation/macos/Library/Application Support/GitHubCopilot/managed-settings.json" json
-        // hooks-reference "Policy hooks": Linux/macOS both read /etc/github-copilot/policy.d/*.json (root-owned, not group/world-writable).
         file "workstation/macos/etc/github-copilot/policy.d/00-agent-platform.json" policyHooks
         file "workstation/macos/com.github.copilot.mobileconfig" mobileconfig
+        // With the .mobileconfig deployed, only the hooks need this script; it also writes the file-based settings,
+        // which the profile overrides key by key.
+        file "workstation/macos/install.sh" (posixInstall "/Library/Application Support/GitHubCopilot/managed-settings.json")
         file "workstation/windows/GitHubCopilot-policy.reg" reg
-        file "workstation/windows/Install-AgentPlatformPolicy.ps1" ps1
+        file "workstation/windows/intune/Detect-GitHubCopilotPolicy.ps1" detect
+        file "workstation/windows/intune/Remediate-GitHubCopilotPolicy.ps1" remediate
+        file "workstation/windows/Install-AgentPlatformPolicy.ps1" install
         file "workstation/windows/ProgramFiles/GitHubCopilot/managed-settings.json" json
     ]
-
 // ---------------------------------------------------------------------------
 // GitHub settings (REST bodies)
 // ---------------------------------------------------------------------------
@@ -625,11 +696,17 @@ let coverage (p: Platform) =
         yield! documentedRows
         row "mcp-registry" [ "cli", "registry v0.1"; "vscode", "registry v0.1"; "visual-studio", "registry v0.1"; "jetbrains", "registry v0.1"; "copilot-app", "registry v0.1" ]
         row "mcp (cloud agent)" [ "cloud-agent", "repository MCP configuration + COPILOT_MCP_ secrets"; "agentic-workflow", "mcp-servers: frontmatter"; "sdk", "SessionConfig.McpServers" ]
-        row "hooks (enforce)" [ "cli", "policy.d + plugin (exec curl.exe, fail-closed)"; "vscode", ".github/hooks (curl, fail-closed)"; "cloud-agent", ".github/hooks (bash curl, fail-closed)"; "sdk", "SessionHooks (in-process)"; "copilot-app", "plugin hooks" ]
+        row "hooks (enforce)" [ "cli", "policy hooks (Windows registry / policy.d) + plugin (exec curl.exe, fail-closed)"; "vscode", ".github/hooks (curl, fail-closed)"; "cloud-agent", ".github/hooks (bash curl, fail-closed)"; "sdk", "SessionHooks (in-process)"; "copilot-app", "plugin hooks" ]
         row "hooks (capture)" [ "cli", "http"; "vscode", "http"; "copilot-app", "http"; "cloud-agent", "http (firewall allowlist)"; "sdk", "in-process"; "agentic-workflow", "OTLP + gh aw logs" ]
         row "standards" [ "cli", "instructions + plugin skills"; "vscode", "instructions + plugin skills"; "visual-studio", "copilot-instructions.md"; "jetbrains", "copilot-instructions.md"; "copilot-app", "plugin skills"; "cloud-agent", "instructions + org instructions"; "sdk", "SystemMessage"; "agentic-workflow", "AGENTS.md + imports" ]
         row "custom agents" [ "cli", ".github-private/agents"; "vscode", ".github-private/agents"; "visual-studio", ".github-private/agents (18.6+)"; "jetbrains", ".github-private/agents"; "copilot-app", ".github-private/agents"; "cloud-agent", ".github-private/agents"; "sdk", "CustomAgents"; "agentic-workflow", "imports: .github/agents" ]
         row "rulesets" [ "cloud-agent", "copilot_code_review, workflows, file_path_restriction"; "agentic-workflow", "required workflows" ]
+        row "session storage" [
+            "cli", (match p.SessionStorage with Some s -> $"Store local sessions in the Cloud: {s.Text}" | None -> "unconfigured (local only)")
+            "copilot-app", (match p.SessionStorage with Some s -> $"Store local sessions in the Cloud: {s.Text}" | None -> "unconfigured (local only)")
+            "cloud-agent", "session log on GitHub.com (shared with repository readers)"
+            "sdk", "SDK session events (Sdk.fileRecorder / platform service)"
+            "agentic-workflow", "gh aw logs + OTLP" ]
         row "content exclusion" [ "cli", "org policy"; "vscode", "org policy"; "visual-studio", "org policy"; "jetbrains", "org policy"; "copilot-app", "org policy"; "cloud-agent", "org policy" ]
     ]
 
@@ -658,6 +735,6 @@ let writeTo (outDir: string) (files: File list) =
         let path = Path.Combine(outDir, f.Path)
         Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
         let content = f.Content.Replace("\r\n", "\n")
-        let content = if f.Path.EndsWith ".ps1" || f.Path.EndsWith ".reg" then content.Replace("\n", "\r\n") else content
+        let content = if f.Path.EndsWith ".ps1" || f.Path.EndsWith ".reg" then content.Replace("\r\n", "\n").Replace("\n", "\r\n") else content
         File.WriteAllText(path, content, UTF8Encoding(false))
     files.Length

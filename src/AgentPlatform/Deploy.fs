@@ -168,6 +168,11 @@ let plan (p: Platform) : Step list = [
 
 /// Settings with no documented API - printed so an admin completes them once.
 let manualSteps (p: Platform) = [
+    match p.SessionStorage with
+    | Some s ->
+        let target = if p.Enterprise <> "" then $"https://github.com/enterprises/{p.Enterprise}/ai-controls/copilot/features (enforce for every organization)" else $"https://github.com/organizations/{p.Organization}/settings/copilot/features"
+        $"Store local sessions in the Cloud = {s.Text}: {target}"
+    | None -> ()
     if not p.Standards.IsEmpty then
         $"Organization custom instructions: paste github/organization-custom-instructions.md into https://github.com/organizations/{p.Organization}/settings/copilot/custom_instructions"
     let registry = p.Mcp.RegistryUrl |> Option.defaultValue p.Host
