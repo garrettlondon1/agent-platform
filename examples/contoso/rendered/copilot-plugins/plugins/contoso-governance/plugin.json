@@ -1,0 +1,10 @@
+{
+  "name": "contoso-governance",
+  "version": "3.0.0",
+  "description": "Contoso's central hooks: guardrails on every tool call and capture of every session.",
+  "category": "governance",
+  "author": {
+    "name": "Agent platform"
+  },
+  "hooks": "hooks.json"
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadIdentifier</key><string>com.contoso.github-copilot</string>
+  <key>PayloadUUID</key><string>2186e625-f08c-1e49-d67a-d6dae9c41392</string>
+  <key>PayloadDisplayName</key><string>GitHub Copilot managed settings (Contoso)</string>
+  <key>PayloadVersion</key><integer>1</integer>
+  <key>PayloadScope</key><string>System</string>
+  <key>PayloadContent</key><array><dict>
+    <key>PayloadType</key><string>com.apple.ManagedClient.preferences</string>
+    <key>PayloadIdentifier</key><string>com.contoso.github-copilot.preferences</string>
+    <key>PayloadUUID</key><string>8f798176-e0f0-7d84-037d-26d8345a70dd</string>
+    <key>PayloadVersion</key><integer>1</integer>
+    <key>PayloadContent</key><dict><key>com.github.copilot</key><dict><key>Forced</key><array><dict>
+      <key>mcx_preference_settings</key><dict>
+          <key>permissions.disableBypassPermissionsMode</key><string>disable</string>
+          <key>permissions.deny</key><string>[&quot;Read(~/.ssh/**)&quot;,&quot;Read(~/.aws/**)&quot;,&quot;Read(~/.azure/**)&quot;,&quot;Edit(//etc/**)&quot;]</string>
+          <key>remoteControl.mode</key><string>requireSSO</string>
+          <key>remoteControl.githubDotComOrganizations</key><string>[&quot;contoso&quot;]</string>
+          <key>sandbox.enabled</key><string>true</string>
+          <key>sandbox.failIfUnavailable</key><string>true</string>
+          <key>sandbox.allowBypass</key><string>false</string>
+          <key>sandbox.addCurrentWorkingDirectory</key><string>false</string>
+          <key>sandbox.sandboxMcpServers</key><string>true</string>
+          <key>sandbox.sandboxLspServers</key><string>true</string>
+          <key>sandbox.gitAuth</key><string>false</string>
+          <key>sandbox.ghAuth</key><string>false</string>
+          <key>sandbox.allowDevToolAccess</key><string>false</string>
+          <key>sandbox.userPolicy</key><string>{&quot;filesystem&quot;:{&quot;readwritePaths&quot;:[&quot;/home&quot;,&quot;/Users&quot;,&quot;C:\\Users&quot;,&quot;C:\\src&quot;],&quot;readonlyPaths&quot;:[&quot;/opt/tools&quot;,&quot;C:\\Tools&quot;],&quot;deniedPaths&quot;:[&quot;/etc/ssh&quot;,&quot;C:\\Windows\\System32\\config&quot;]},&quot;network&quot;:{&quot;allowLocalNetwork&quot;:false,&quot;allowedHosts&quot;:[&quot;github.com&quot;,&quot;*.githubusercontent.com&quot;,&quot;*.contoso.com&quot;],&quot;blockedHosts&quot;:[&quot;pastebin.com&quot;],&quot;proxy&quot;:{&quot;url&quot;:&quot;http://egress.contoso.com:3128&quot;}},&quot;seatbelt&quot;:{&quot;keychainAccess&quot;:false}}</string>
+          <key>sandbox.learningMode</key><string>deny</string>
+          <key>policyHelper.path</key><string>C:\Program Files\Contoso\copilot-policy.exe</string>
+          <key>policyHelper.args</key><string>[&quot;--json&quot;]</string>
+          <key>policyHelper.timeoutMs</key><string>2000</string>
+          <key>policyHelper.refreshIntervalMs</key><string>3600000</string>
+          <key>forceLoginOrgs</key><string>[&quot;contoso&quot;]</string>
+      </dict>
+    </dict></array></dict></dict>
+  </dict></array>
+</dict></plist>

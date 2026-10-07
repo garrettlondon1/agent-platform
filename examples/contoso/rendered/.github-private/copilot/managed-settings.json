@@ -1,0 +1,209 @@
+{
+  "features": {
+    "computerUse": false
+  },
+  "model": {
+    "overridable": "auto"
+  },
+  "autoTier": {
+    "overridable": "balance"
+  },
+  "permissions": {
+    "disableBypassPermissionsMode": {
+      "overridable": "disable"
+    },
+    "deny": {
+      "overridable": [
+        "Read(~/.ssh/**)",
+        "Read(~/.aws/**)",
+        "Read(**/.env)",
+        "Edit(//etc/**)",
+        "Shell(git push --force *)",
+        "PowerShell(Remove-Item -Recurse -Force *)",
+        "Domain(pastebin.com)"
+      ]
+    },
+    "ask": {
+      "overridable": [
+        "Shell(git push *)",
+        "Shell(terraform apply *)",
+        "Edit(/.github/workflows/**)"
+      ]
+    },
+    "allow": {
+      "overridable": [
+        "Read(/**)",
+        "Edit(/src/**)",
+        "Edit(/test/**)",
+        "Edit(/tests/**)",
+        "Edit(/docs/**)",
+        "Shell(git status *)",
+        "Shell(git diff *)",
+        "Shell(git log *)",
+        "Shell(git add *)",
+        "Shell(git commit *)",
+        "Shell(dotnet build *)",
+        "Shell(dotnet test *)",
+        "Shell(npm test *)",
+        "Domain(github.com)",
+        "Domain(*.githubusercontent.com)",
+        "Domain(npm.contoso.com)"
+      ]
+    }
+  },
+  "telemetry": {
+    "enabled": true,
+    "endpoint": "https://agents.contoso.com",
+    "protocol": "http/json",
+    "captureContent": false,
+    "lockCaptureContent": true,
+    "serviceName": "github-copilot",
+    "resourceAttributes": {
+      "deployment.environment": "production",
+      "contoso.business_unit": "engineering"
+    },
+    "headers": {
+      "x-contoso-tenant": "contoso"
+    }
+  },
+  "remoteControl": {
+    "mode": "requireSSO",
+    "githubDotComOrganizations": [
+      "contoso"
+    ]
+  },
+  "allowedMcpServers": {
+    "overridable": [
+      {
+        "serverUrl": "https://mcp.atlassian.com/*"
+      },
+      {
+        "serverUrl": "https://mcp.sentry.dev/*"
+      },
+      {
+        "serverCommand": [
+          "npx",
+          "-y",
+          "@azure/mcp@0.9.3"
+        ]
+      },
+      {
+        "serverCommand": [
+          "npx",
+          "-y",
+          "@playwright/mcp@0.0.41"
+        ]
+      },
+      {
+        "serverCommand": [
+          "uvx",
+          "markitdown-mcp==0.0.1a4"
+        ]
+      },
+      {
+        "serverCommand": [
+          "docker",
+          "run",
+          "-i",
+          "--rm",
+          "hashicorp/terraform-mcp-server:0.2.3"
+        ]
+      },
+      {
+        "serverCommand": [
+          "dotnet",
+          "tool",
+          "run",
+          "contoso-docs-mcp"
+        ]
+      },
+      {
+        "serverUrl": "https://api.githubcopilot.com/*"
+      }
+    ]
+  },
+  "deniedMcpServers": {
+    "overridable": [
+      {
+        "serverName": "untrusted-server"
+      },
+      {
+        "serverCommand": [
+          "npx",
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "/"
+        ]
+      },
+      {
+        "serverUrl": "https://*.ngrok.io/*"
+      },
+      {
+        "serverUrl": "https://*.ngrok-free.app/*"
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "unvetted-tools@awesome-copilot": false,
+    "contoso-governance@contoso-copilot-plugins": true,
+    "contoso-engineering@contoso-copilot-plugins": true,
+    "contoso-security@contoso-copilot-plugins": true,
+    "contoso-platform-ops@contoso-copilot-plugins": true
+  },
+  "extraKnownMarketplaces": {
+    "overridable": {
+      "contoso-copilot-plugins": {
+        "source": {
+          "source": "github",
+          "repo": "contoso/copilot-plugins",
+          "ref": "main"
+        },
+        "autoUpdate": true
+      },
+      "awesome-copilot": {
+        "source": {
+          "source": "github",
+          "repo": "github/awesome-copilot"
+        },
+        "autoUpdate": false
+      }
+    }
+  },
+  "strictKnownMarketplaces": {
+    "overridable": [
+      {
+        "source": "github",
+        "repo": "contoso/copilot-plugins"
+      },
+      {
+        "source": "github",
+        "repo": "github/awesome-copilot"
+      },
+      {
+        "source": "hostPattern",
+        "hostPattern": "^plugins\\.contoso\\.com$"
+      }
+    ]
+  },
+  "sandbox": {
+    "overridable": {
+      "enabled": true,
+      "allowBypass": false,
+      "sandboxMcpServers": true,
+      "sandboxLspServers": true,
+      "userPolicy": {
+        "network": {
+          "allowLocalNetwork": false,
+          "blockedHosts": [
+            "pastebin.com",
+            "transfer.sh"
+          ]
+        }
+      }
+    }
+  },
+  "effortLevel": "medium",
+  "contextTier": "default",
+  "shellShortcut": false,
+  "forceRemoteSettingsRefresh": true
+}

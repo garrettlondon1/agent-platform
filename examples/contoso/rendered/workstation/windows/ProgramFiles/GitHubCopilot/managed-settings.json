@@ -1,0 +1,74 @@
+{
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.azure/**)",
+      "Edit(//etc/**)"
+    ]
+  },
+  "remoteControl": {
+    "mode": "requireSSO",
+    "githubDotComOrganizations": [
+      "contoso"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowBypass": false,
+    "addCurrentWorkingDirectory": false,
+    "sandboxMcpServers": true,
+    "sandboxLspServers": true,
+    "gitAuth": false,
+    "ghAuth": false,
+    "allowDevToolAccess": false,
+    "userPolicy": {
+      "filesystem": {
+        "readwritePaths": [
+          "/home",
+          "/Users",
+          "C:\\Users",
+          "C:\\src"
+        ],
+        "readonlyPaths": [
+          "/opt/tools",
+          "C:\\Tools"
+        ],
+        "deniedPaths": [
+          "/etc/ssh",
+          "C:\\Windows\\System32\\config"
+        ]
+      },
+      "network": {
+        "allowLocalNetwork": false,
+        "allowedHosts": [
+          "github.com",
+          "*.githubusercontent.com",
+          "*.contoso.com"
+        ],
+        "blockedHosts": [
+          "pastebin.com"
+        ],
+        "proxy": {
+          "url": "http://egress.contoso.com:3128"
+        }
+      },
+      "seatbelt": {
+        "keychainAccess": false
+      }
+    }
+  },
+  "policyHelper": {
+    "path": "C:\\Program Files\\Contoso\\copilot-policy.exe",
+    "args": [
+      "--json"
+    ],
+    "timeoutMs": 2000,
+    "refreshIntervalMs": 3600000
+  },
+  "forceLoginOrgs": [
+    "contoso"
+  ]
+}

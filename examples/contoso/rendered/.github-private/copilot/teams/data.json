@@ -1,0 +1,49 @@
+{
+  "enabledPlugins": {
+    "contoso-documents@contoso-copilot-plugins": true
+  },
+  "extraKnownMarketplaces": {
+    "contoso-copilot-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "contoso/copilot-plugins",
+        "ref": "main"
+      },
+      "autoUpdate": true
+    },
+    "awesome-copilot": {
+      "source": {
+        "source": "github",
+        "repo": "github/awesome-copilot"
+      },
+      "autoUpdate": false
+    },
+    "data-tools": {
+      "source": {
+        "source": "git",
+        "url": "https://git.contoso.com/data/copilot-plugins.git"
+      }
+    }
+  },
+  "strictKnownMarketplaces": [
+    {
+      "source": "github",
+      "repo": "contoso/copilot-plugins"
+    },
+    {
+      "source": "github",
+      "repo": "github/awesome-copilot"
+    },
+    {
+      "source": "git",
+      "url": "https://git.contoso.com/data/copilot-plugins.git"
+    },
+    {
+      "source": "url",
+      "url": "https://plugins.contoso.com/marketplace.json",
+      "headers": {
+        "Authorization": "Bearer ${PLUGINS_TOKEN}"
+      }
+    }
+  ]
+}

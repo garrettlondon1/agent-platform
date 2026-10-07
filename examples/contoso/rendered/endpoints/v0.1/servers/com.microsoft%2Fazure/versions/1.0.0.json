@@ -1,0 +1,36 @@
+{
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "com.microsoft/azure",
+    "title": "Azure",
+    "description": "Inspect Azure resources (read-only tools).",
+    "version": "1.0.0",
+    "packages": [
+      {
+        "registryType": "npm",
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "identifier": "@azure/mcp",
+        "version": "0.9.3",
+        "runtimeHint": "npx",
+        "transport": {
+          "type": "stdio"
+        },
+        "runtimeArguments": [
+          {
+            "type": "positional",
+            "value": "-y"
+          }
+        ]
+      }
+    ]
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "status": "active",
+      "statusChangedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "publishedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "updatedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "isLatest": true
+    }
+  }
+}

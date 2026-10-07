@@ -1,0 +1,55 @@
+{
+  "mcpServers": {
+    "sentry": {
+      "type": "http",
+      "url": "https://mcp.sentry.dev/sse",
+      "tools": [
+        "get_issue_details",
+        "search_issues"
+      ]
+    },
+    "azure": {
+      "type": "local",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure/mcp@0.9.3"
+      ],
+      "tools": [
+        "group_list",
+        "subscription_list",
+        "monitor_query",
+        "resource_list"
+      ]
+    },
+    "terraform": {
+      "type": "local",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "hashicorp/terraform-mcp-server:0.2.3"
+      ],
+      "tools": [
+        "searchModules",
+        "moduleDetails",
+        "resolveProviderDocID",
+        "getProviderDocs"
+      ]
+    },
+    "contoso-docs": {
+      "type": "local",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "run",
+        "contoso-docs-mcp"
+      ],
+      "tools": [
+        "search",
+        "get_page"
+      ]
+    }
+  }
+}

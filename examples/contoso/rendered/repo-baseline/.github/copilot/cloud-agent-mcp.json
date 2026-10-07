@@ -1,0 +1,73 @@
+{
+  "mcpServers": {
+    "jira": {
+      "type": "http",
+      "url": "https://mcp.atlassian.com/v1/mcp",
+      "headers": {
+        "Authorization": "$COPILOT_MCP_JIRA_AUTHORIZATION"
+      },
+      "tools": [
+        "getJiraIssue",
+        "searchJiraIssuesUsingJql",
+        "getVisibleJiraProjects"
+      ]
+    },
+    "sentry": {
+      "type": "sse",
+      "url": "https://mcp.sentry.dev/sse",
+      "headers": {
+        "Authorization": "$COPILOT_MCP_SENTRY_AUTHORIZATION"
+      },
+      "tools": [
+        "get_issue_details",
+        "search_issues"
+      ]
+    },
+    "azure": {
+      "type": "local",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure/mcp@0.9.3"
+      ],
+      "tools": [
+        "group_list",
+        "subscription_list",
+        "monitor_query",
+        "resource_list"
+      ]
+    },
+    "terraform": {
+      "type": "local",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "hashicorp/terraform-mcp-server:0.2.3"
+      ],
+      "tools": [
+        "searchModules",
+        "moduleDetails",
+        "resolveProviderDocID",
+        "getProviderDocs"
+      ]
+    },
+    "contoso-docs": {
+      "type": "local",
+      "command": "dotnet",
+      "args": [
+        "tool",
+        "run",
+        "contoso-docs-mcp"
+      ],
+      "env": {
+        "DOCS_TOKEN": "$COPILOT_MCP_CONTOSO_DOCS_DOCS_TOKEN"
+      },
+      "tools": [
+        "search",
+        "get_page"
+      ]
+    }
+  }
+}

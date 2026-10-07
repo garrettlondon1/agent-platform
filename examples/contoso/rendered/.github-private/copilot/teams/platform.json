@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "disableBypassPermissionsMode": "allow-auto-only"
+  },
+  "allowedMcpServers": [
+    {
+      "serverUrl": "https://api.githubcopilot.com/*"
+    },
+    {
+      "serverUrl": "https://mcp.sentry.dev/*"
+    },
+    {
+      "serverCommand": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "hashicorp/terraform-mcp-server:0.2.3"
+      ]
+    }
+  ]
+}

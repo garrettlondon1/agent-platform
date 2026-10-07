@@ -1,0 +1,29 @@
+Windows Registry Editor Version 5.00
+
+; Adds or updates the platform's values and leaves values other MDM policies own untouched. Removing a setting
+; later needs the Intune Remediations pair (it tracks what it wrote) or a "name"=- line here.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\GitHubCopilot]
+"permissions.disableBypassPermissionsMode"="disable"
+"permissions.deny"="[\"Read(~/.ssh/**)\",\"Read(~/.aws/**)\",\"Read(~/.azure/**)\",\"Edit(//etc/**)\"]"
+"remoteControl.mode"="requireSSO"
+"remoteControl.githubDotComOrganizations"="[\"contoso\"]"
+"sandbox.enabled"="true"
+"sandbox.failIfUnavailable"="true"
+"sandbox.allowBypass"="false"
+"sandbox.addCurrentWorkingDirectory"="false"
+"sandbox.sandboxMcpServers"="true"
+"sandbox.sandboxLspServers"="true"
+"sandbox.gitAuth"="false"
+"sandbox.ghAuth"="false"
+"sandbox.allowDevToolAccess"="false"
+"sandbox.userPolicy"="{\"filesystem\":{\"readwritePaths\":[\"/home\",\"/Users\",\"C:\\\\Users\",\"C:\\\\src\"],\"readonlyPaths\":[\"/opt/tools\",\"C:\\\\Tools\"],\"deniedPaths\":[\"/etc/ssh\",\"C:\\\\Windows\\\\System32\\\\config\"]},\"network\":{\"allowLocalNetwork\":false,\"allowedHosts\":[\"github.com\",\"*.githubusercontent.com\",\"*.contoso.com\"],\"blockedHosts\":[\"pastebin.com\"],\"proxy\":{\"url\":\"http://egress.contoso.com:3128\"}},\"seatbelt\":{\"keychainAccess\":false}}"
+"sandbox.learningMode"="deny"
+"policyHelper.path"="C:\\Program Files\\Contoso\\copilot-policy.exe"
+"policyHelper.args"="[\"--json\"]"
+"policyHelper.timeoutMs"="2000"
+"policyHelper.refreshIntervalMs"="3600000"
+"forceLoginOrgs"="[\"contoso\"]"
+
+; Machine-wide policy hooks: load before every other hook and cannot be disabled by users.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\GitHub\Copilot\agent-platform]
+"Policy"="{\"version\":1,\"hooks\":{\"preToolUse\":[{\"type\":\"command\",\"exec\":\"curl.exe\",\"args\":[\"-sS\",\"--fail\",\"--max-time\",\"4\",\"--variable\",\"%AGENTP_HOOK_TOKEN\",\"--expand-header\",\"Authorization: Bearer {{AGENTP_HOOK_TOKEN}}\",\"-H\",\"Content-Type: application/json\",\"-H\",\"X-Agentp-Event: preToolUse\",\"-H\",\"X-Agentp-Source: policy-hook\",\"--data-binary\",\"@-\",\"https://agents.contoso.com/hooks?decide=1\"],\"timeoutSec\":5}],\"postToolUse\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"postToolUse\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"userPromptSubmitted\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"userPromptSubmitted\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"sessionStart\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"sessionStart\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"postToolUseFailure\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"postToolUseFailure\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"subagentStart\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"subagentStart\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"subagentStop\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"subagentStop\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"agentStop\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"agentStop\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"errorOccurred\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"errorOccurred\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"preCompact\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"preCompact\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}],\"sessionEnd\":[{\"type\":\"http\",\"url\":\"https://agents.contoso.com/hooks\",\"headers\":{\"X-Agentp-Event\":\"sessionEnd\",\"X-Agentp-Source\":\"policy-hook\",\"Authorization\":\"Bearer ${AGENTP_HOOK_TOKEN}\"},\"allowedEnvVars\":[\"AGENTP_HOOK_TOKEN\"],\"timeoutSec\":5}]}}"

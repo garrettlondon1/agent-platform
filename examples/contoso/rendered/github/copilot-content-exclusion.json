@@ -1,0 +1,10 @@
+{
+  "*": [
+    "**/secrets/**",
+    "**/*.pfx",
+    "**/cardholder/**"
+  ],
+  "payments-api": [
+    "/src/Tokenization/**"
+  ]
+}

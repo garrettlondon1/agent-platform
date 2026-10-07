@@ -1,0 +1,61 @@
+{
+  "name": "security-gates",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    },
+    "repository_name": {
+      "include": [
+        "payments-*",
+        "checkout-*"
+      ],
+      "exclude": [
+        "payments-sandbox"
+      ],
+      "protected": true
+    }
+  },
+  "rules": [
+    {
+      "type": "code_scanning",
+      "parameters": {
+        "code_scanning_tools": [
+          {
+            "tool": "CodeQL",
+            "security_alerts_threshold": "high_or_higher",
+            "alerts_threshold": "errors"
+          }
+        ]
+      }
+    },
+    {
+      "type": "workflows",
+      "parameters": {
+        "workflows": [
+          {
+            "repository_id": 123456789,
+            "path": ".github/workflows/security-triage.lock.yml",
+            "ref": "refs/heads/main"
+          }
+        ]
+      }
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_type": "RepositoryRole",
+      "actor_id": 5,
+      "bypass_mode": "pull_request"
+    },
+    {
+      "actor_type": "Integration",
+      "actor_id": 987654,
+      "bypass_mode": "always"
+    }
+  ]
+}

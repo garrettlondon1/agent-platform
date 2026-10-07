@@ -1,0 +1,47 @@
+{
+  "name": "contoso-copilot-plugins",
+  "owner": {
+    "name": "Contoso",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Approved Copilot plugins for Contoso. Installed by enterprise managed settings."
+  },
+  "plugins": [
+    {
+      "name": "contoso-governance",
+      "source": "./plugins/contoso-governance",
+      "description": "Contoso's central hooks: guardrails on every tool call and capture of every session.",
+      "version": "3.0.0",
+      "category": "governance"
+    },
+    {
+      "name": "contoso-engineering",
+      "source": "./plugins/contoso-engineering",
+      "description": "Contoso standards as skills, the standards reviewer, and the release notes skill.",
+      "version": "2.4.1",
+      "category": "engineering"
+    },
+    {
+      "name": "contoso-security",
+      "source": "./plugins/contoso-security",
+      "description": "Security triage agent with read-only Jira.",
+      "version": "1.0.0",
+      "category": "security"
+    },
+    {
+      "name": "contoso-platform-ops",
+      "source": "./plugins/contoso-platform-ops",
+      "description": "Platform engineering and incident agents with read-only Azure, Terraform, Sentry and docs tools.",
+      "version": "1.0.0",
+      "category": "operations"
+    },
+    {
+      "name": "contoso-documents",
+      "source": "./plugins/contoso-documents",
+      "description": "Read PDFs and Office documents (only for teams that need it).",
+      "version": "1.0.0",
+      "category": "productivity"
+    }
+  ]
+}

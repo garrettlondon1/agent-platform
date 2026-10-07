@@ -1,0 +1,7 @@
+{
+  "model": "unmanaged",
+  "autoTier": "unmanaged",
+  "permissions": {
+    "disableBypassPermissionsMode": "unmanaged"
+  }
+}

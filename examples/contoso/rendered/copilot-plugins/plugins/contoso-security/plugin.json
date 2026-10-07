@@ -1,0 +1,11 @@
+{
+  "name": "contoso-security",
+  "version": "1.0.0",
+  "description": "Security triage agent with read-only Jira.",
+  "category": "security",
+  "author": {
+    "name": "Agent platform"
+  },
+  "agents": "agents/",
+  "mcpServers": ".mcp.json"
+}

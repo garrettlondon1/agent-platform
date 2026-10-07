@@ -1,0 +1,67 @@
+{
+  "name": "agents-are-reviewed",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH",
+        "release/*"
+      ],
+      "exclude": []
+    },
+    "repository_name": {
+      "include": [
+        "~ALL"
+      ],
+      "exclude": [],
+      "protected": false
+    }
+  },
+  "rules": [
+    {
+      "type": "copilot_code_review",
+      "parameters": {
+        "review_on_push": true,
+        "review_draft_pull_requests": true
+      }
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "require_code_owner_review": true,
+        "dismiss_stale_reviews_on_push": true,
+        "require_last_push_approval": true,
+        "required_review_thread_resolution": true
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          {
+            "context": "build"
+          },
+          {
+            "context": "test"
+          }
+        ]
+      }
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "deletion"
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_type": "Team",
+      "actor_id": 4242,
+      "bypass_mode": "pull_request"
+    }
+  ]
+}

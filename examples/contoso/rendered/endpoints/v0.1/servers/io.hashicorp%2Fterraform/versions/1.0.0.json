@@ -1,0 +1,44 @@
+{
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.hashicorp/terraform",
+    "title": "Terraform registry",
+    "description": "Look up Terraform providers and modules.",
+    "version": "1.0.0",
+    "packages": [
+      {
+        "registryType": "oci",
+        "registryBaseUrl": "https://docker.io",
+        "identifier": "hashicorp/terraform-mcp-server",
+        "version": "0.2.3",
+        "runtimeHint": "docker",
+        "transport": {
+          "type": "stdio"
+        },
+        "runtimeArguments": [
+          {
+            "type": "positional",
+            "value": "run"
+          },
+          {
+            "type": "positional",
+            "value": "-i"
+          },
+          {
+            "type": "positional",
+            "value": "--rm"
+          }
+        ]
+      }
+    ]
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "status": "active",
+      "statusChangedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "publishedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "updatedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "isLatest": true
+    }
+  }
+}

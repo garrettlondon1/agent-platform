@@ -1,0 +1,22 @@
+{
+  "payments.json": [
+    "payments-eng",
+    "ent:payments-eng",
+    "payments-contractors",
+    "ent:payments-contractors"
+  ],
+  "platform.json": [
+    "platform-eng",
+    "ent:platform-eng",
+    "sre",
+    "ent:sre"
+  ],
+  "data.json": [
+    "data-eng",
+    "ent:data-eng"
+  ],
+  "ai-pioneers.json": [
+    "ai-pioneers",
+    "ent:ai-pioneers"
+  ]
+}

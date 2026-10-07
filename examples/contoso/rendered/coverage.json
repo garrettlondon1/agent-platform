@@ -1,0 +1,366 @@
+[
+  {
+    "control": "permissions.disableBypassPermissionsMode",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "SessionConfig",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "permissions.deny",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "SessionConfig",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "permissions.ask",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "SessionConfig",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "permissions.allow",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "SessionConfig",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "features.computerUse",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "model",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "managed-settings",
+      "sdk": "SessionConfig",
+      "agentic-workflow": "gh aw env defaults"
+    }
+  },
+  {
+    "control": "autoTier",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "enabledPlugins",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "managed-settings",
+      "sdk": "PluginDirectories",
+      "agentic-workflow": "plugins: frontmatter"
+    }
+  },
+  {
+    "control": "extraKnownMarketplaces",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "managed-settings",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "strictKnownMarketplaces",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "managed-settings",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "telemetry",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "",
+      "cloud-agent": "",
+      "sdk": "SessionConfig",
+      "agentic-workflow": "gh aw env defaults"
+    }
+  },
+  {
+    "control": "remoteControl",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "allowedMcpServers",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "deniedMcpServers",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "managed-settings",
+      "visual-studio": "",
+      "jetbrains": "managed-settings",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "sandbox",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "managed-settings",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "effortLevel",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "contextTier",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "shellShortcut",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "forceRemoteSettingsRefresh",
+    "surfaces": {
+      "cli": "managed-settings",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "mcp-registry",
+    "surfaces": {
+      "cli": "registry v0.1",
+      "vscode": "registry v0.1",
+      "visual-studio": "registry v0.1",
+      "jetbrains": "registry v0.1",
+      "copilot-app": "registry v0.1",
+      "cloud-agent": "",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "mcp (cloud agent)",
+    "surfaces": {
+      "cli": "",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "repository MCP configuration + COPILOT_MCP_ secrets",
+      "sdk": "SessionConfig.McpServers",
+      "agentic-workflow": "mcp-servers: frontmatter"
+    }
+  },
+  {
+    "control": "hooks (enforce)",
+    "surfaces": {
+      "cli": "policy hooks (Windows registry / policy.d) + plugin (exec curl.exe, fail-closed)",
+      "vscode": ".github/hooks (curl, fail-closed)",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "plugin hooks",
+      "cloud-agent": ".github/hooks (bash curl, fail-closed)",
+      "sdk": "SessionHooks (in-process)",
+      "agentic-workflow": ""
+    }
+  },
+  {
+    "control": "hooks (capture)",
+    "surfaces": {
+      "cli": "http",
+      "vscode": "http",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "http",
+      "cloud-agent": "http (firewall allowlist)",
+      "sdk": "in-process",
+      "agentic-workflow": "OTLP + gh aw logs"
+    }
+  },
+  {
+    "control": "standards",
+    "surfaces": {
+      "cli": "instructions + plugin skills",
+      "vscode": "instructions + plugin skills",
+      "visual-studio": "copilot-instructions.md",
+      "jetbrains": "copilot-instructions.md",
+      "copilot-app": "plugin skills",
+      "cloud-agent": "instructions + org instructions",
+      "sdk": "SystemMessage",
+      "agentic-workflow": "AGENTS.md + imports"
+    }
+  },
+  {
+    "control": "custom agents",
+    "surfaces": {
+      "cli": ".github-private/agents",
+      "vscode": ".github-private/agents",
+      "visual-studio": ".github-private/agents (18.6+)",
+      "jetbrains": ".github-private/agents",
+      "copilot-app": ".github-private/agents",
+      "cloud-agent": ".github-private/agents",
+      "sdk": "CustomAgents",
+      "agentic-workflow": "imports: .github/agents"
+    }
+  },
+  {
+    "control": "rulesets",
+    "surfaces": {
+      "cli": "",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "",
+      "cloud-agent": "copilot_code_review, workflows, file_path_restriction",
+      "sdk": "",
+      "agentic-workflow": "required workflows"
+    }
+  },
+  {
+    "control": "session storage",
+    "surfaces": {
+      "cli": "Store local sessions in the Cloud: View and control",
+      "vscode": "",
+      "visual-studio": "",
+      "jetbrains": "",
+      "copilot-app": "Store local sessions in the Cloud: View and control",
+      "cloud-agent": "session log on GitHub.com (shared with repository readers)",
+      "sdk": "SDK session events (Sdk.fileRecorder / platform service)",
+      "agentic-workflow": "gh aw logs + OTLP"
+    }
+  },
+  {
+    "control": "content exclusion",
+    "surfaces": {
+      "cli": "org policy",
+      "vscode": "org policy",
+      "visual-studio": "org policy",
+      "jetbrains": "org policy",
+      "copilot-app": "org policy",
+      "cloud-agent": "org policy",
+      "sdk": "",
+      "agentic-workflow": ""
+    }
+  }
+]

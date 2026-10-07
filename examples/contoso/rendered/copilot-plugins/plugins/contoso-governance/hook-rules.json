@@ -1,0 +1,336 @@
+{
+  "version": "2026.10.1",
+  "rules": [
+    {
+      "name": "no-force-push",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "anyOf": [
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "git push --force"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "git push -f"
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "block": "Force-pushing rewrites shared history. Push a new commit instead."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "no-secrets",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "anyOf": [
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "view",
+                  "grep",
+                  "glob"
+                ]
+              },
+              {
+                "pathMatches": "**/.env"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "view",
+                  "grep",
+                  "glob"
+                ]
+              },
+              {
+                "pathMatches": "**/*.pem"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "view",
+                  "grep",
+                  "glob"
+                ]
+              },
+              {
+                "pathMatches": "**/.ssh/**"
+              }
+            ]
+          },
+          {
+            "argsMatch": "(\\.aws|\\.azure)[\\\\/]"
+          }
+        ]
+      },
+      "then": {
+        "block": "Secrets and credential files are off limits to agents."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "no-pipe-to-shell",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "argsMatch": "curl[^|]*\\|\\s*(ba|z)?sh"
+      },
+      "then": {
+        "block": "Piping downloads into a shell is not allowed."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "no-exfil-hosts",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "all": [
+          {
+            "toolIs": [
+              "web_fetch"
+            ]
+          },
+          {
+            "argsMatch": "(pastebin\\.com|transfer\\.sh|ngrok)"
+          }
+        ]
+      },
+      "then": {
+        "block": "That host is a known exfiltration channel."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "protect-workflows",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "all": [
+          {
+            "toolIs": [
+              "edit",
+              "create",
+              "str_replace_editor",
+              "apply_patch"
+            ]
+          },
+          {
+            "pathMatches": ".github/workflows/**"
+          }
+        ]
+      },
+      "then": {
+        "requireApproval": "Changing CI workflows needs a person to approve."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "prod-deploys",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "anyOf": [
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "terraform apply"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "kubectl apply"
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "kubectl delete"
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "requireApproval": "Production changes need a person to approve."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "internal-npm-only",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "all": [
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "npm install"
+              }
+            ]
+          },
+          {
+            "not": {
+              "argsMatch": "--registry=https://npm\\.contoso\\.com"
+            }
+          }
+        ]
+      },
+      "then": {
+        "requireApproval": "Install from https://npm.contoso.com or ask a person."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "cloud-agent-no-kubectl",
+      "events": [
+        "preToolUse"
+      ],
+      "when": {
+        "all": [
+          {
+            "onSurface": [
+              "cloud-agent"
+            ]
+          },
+          {
+            "all": [
+              {
+                "toolIs": [
+                  "bash",
+                  "powershell"
+                ]
+              },
+              {
+                "commandStartsWith": "kubectl"
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "block": "Cloud agent never talks to clusters; open a pull request instead."
+      },
+      "onFailure": "closed"
+    },
+    {
+      "name": "test-reminder",
+      "events": [
+        "postToolUse"
+      ],
+      "when": {
+        "all": [
+          {
+            "toolIs": [
+              "edit",
+              "create",
+              "str_replace_editor",
+              "apply_patch"
+            ]
+          },
+          {
+            "pathMatches": "src/**"
+          }
+        ]
+      },
+      "then": {
+        "addContext": "Contoso standard: add or update a test for this change before finishing."
+      },
+      "onFailure": "open"
+    },
+    {
+      "name": "cardholder-data",
+      "description": "Reminds the agent of PCI rules when a prompt mentions card data.",
+      "events": [
+        "userPromptSubmitted"
+      ],
+      "when": {
+        "promptContains": "card number"
+      },
+      "then": {
+        "addContext": "Cardholder data never goes into code, logs, tests or prompts; use the tokenization service."
+      },
+      "onFailure": "open"
+    }
+  ],
+  "capture": {
+    "events": [
+      "sessionStart",
+      "userPromptSubmitted",
+      "preToolUse",
+      "postToolUse",
+      "postToolUseFailure",
+      "subagentStart",
+      "subagentStop",
+      "agentStop",
+      "errorOccurred",
+      "preCompact",
+      "sessionEnd"
+    ],
+    "includeContent": false
+  }
+}

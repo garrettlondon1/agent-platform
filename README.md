@@ -94,7 +94,10 @@ for the enterprise default, a separate device policy for Intune / Jamf, four ent
 every rule and bypass type, content exclusion, cloud agent settings, session storage, rollout stage and the deployer.
 
 This is `examples/contoso/Platform.fs`, verbatim: CI compiles it, `validate` passes, it renders 95 files, and its five
-agentic workflows compile with `gh aw compile --strict`.
+agentic workflows compile with `gh aw compile --strict`. The rendered output is committed in
+[`examples/contoso/rendered`](examples/contoso/rendered) — for example the enterprise
+[`managed-settings.json`](examples/contoso/rendered/.github-private/copilot/managed-settings.json) and its
+[team overrides](examples/contoso/rendered/.github-private/copilot/teams).
 
 <!-- full-example:start -->
 ```fsharp

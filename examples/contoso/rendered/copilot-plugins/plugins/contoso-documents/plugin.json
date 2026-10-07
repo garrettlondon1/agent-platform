@@ -1,0 +1,10 @@
+{
+  "name": "contoso-documents",
+  "version": "1.0.0",
+  "description": "Read PDFs and Office documents (only for teams that need it).",
+  "category": "productivity",
+  "author": {
+    "name": "Agent platform"
+  },
+  "mcpServers": ".mcp.json"
+}

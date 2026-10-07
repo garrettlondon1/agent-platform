@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "exec": "curl.exe",
+        "args": [
+          "-sS",
+          "--fail",
+          "--max-time",
+          "4",
+          "--variable",
+          "%AGENTP_HOOK_TOKEN",
+          "--expand-header",
+          "Authorization: Bearer {{AGENTP_HOOK_TOKEN}}",
+          "-H",
+          "Content-Type: application/json",
+          "-H",
+          "X-Agentp-Event: preToolUse",
+          "-H",
+          "X-Agentp-Source: plugin:contoso-governance",
+          "--data-binary",
+          "@-",
+          "https://agents.contoso.com/hooks?decide=1"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "postToolUse",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "userPromptSubmitted",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "sessionStart": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "sessionStart",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "postToolUseFailure",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "subagentStart": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "subagentStart",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "subagentStop",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "agentStop",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "errorOccurred": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "errorOccurred",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "preCompact": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "preCompact",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "http",
+        "url": "https://agents.contoso.com/hooks",
+        "headers": {
+          "X-Agentp-Event": "sessionEnd",
+          "X-Agentp-Source": "plugin:contoso-governance",
+          "Authorization": "Bearer ${AGENTP_HOOK_TOKEN}"
+        },
+        "allowedEnvVars": [
+          "AGENTP_HOOK_TOKEN"
+        ],
+        "timeoutSec": 5
+      }
+    ]
+  }
+}

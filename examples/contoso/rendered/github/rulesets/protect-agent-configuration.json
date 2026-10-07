@@ -1,0 +1,34 @@
+{
+  "name": "protect-agent-configuration",
+  "target": "push",
+  "enforcement": "active",
+  "conditions": {
+    "repository_name": {
+      "include": [
+        "~ALL"
+      ],
+      "exclude": [],
+      "protected": false
+    }
+  },
+  "rules": [
+    {
+      "type": "file_path_restriction",
+      "parameters": {
+        "restricted_file_paths": [
+          ".github/hooks/**",
+          ".github/copilot/**",
+          ".github/agents/**",
+          "AGENTS.md"
+        ]
+      }
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_type": "OrganizationAdmin",
+      "actor_id": 1,
+      "bypass_mode": "always"
+    }
+  ]
+}

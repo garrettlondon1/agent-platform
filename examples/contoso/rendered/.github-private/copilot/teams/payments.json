@@ -1,0 +1,50 @@
+{
+  "autoTier": "efficiency",
+  "permissions": {
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Read(**/.env)",
+      "Read(**/cardholder/**)",
+      "Shell(curl *)",
+      "Shell(git push --force *)"
+    ],
+    "ask": [
+      "Shell(git push *)"
+    ],
+    "allow": [
+      "Read(/src/**)",
+      "Read(/test/**)",
+      "Shell(git status *)",
+      "Shell(git diff *)",
+      "Shell(dotnet test *)"
+    ]
+  },
+  "deniedMcpServers": [
+    {
+      "serverName": "untrusted-server"
+    },
+    {
+      "serverUrl": "https://*.ngrok.io/*"
+    },
+    {
+      "serverUrl": "https://mcp.sentry.dev/*"
+    }
+  ],
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowBypass": false,
+    "sandboxMcpServers": true,
+    "allowDevToolAccess": false,
+    "userPolicy": {
+      "network": {
+        "allowOutbound": false,
+        "allowLocalNetwork": false,
+        "allowedHosts": [
+          "github.com",
+          "*.githubusercontent.com"
+        ]
+      }
+    }
+  }
+}

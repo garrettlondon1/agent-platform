@@ -1,0 +1,30 @@
+{
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "com.microsoft/markitdown",
+    "title": "MarkItDown",
+    "description": "Convert PDFs and Office documents to Markdown.",
+    "version": "1.0.0",
+    "packages": [
+      {
+        "registryType": "pypi",
+        "registryBaseUrl": "https://pypi.org",
+        "identifier": "markitdown-mcp",
+        "version": "0.0.1a4",
+        "runtimeHint": "uvx",
+        "transport": {
+          "type": "stdio"
+        }
+      }
+    ]
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "status": "active",
+      "statusChangedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "publishedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "updatedAt": "2026-01-01T00:00:00.0000000+00:00",
+      "isLatest": true
+    }
+  }
+}

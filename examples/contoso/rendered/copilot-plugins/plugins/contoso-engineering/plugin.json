@@ -1,0 +1,11 @@
+{
+  "name": "contoso-engineering",
+  "version": "2.4.1",
+  "description": "Contoso standards as skills, the standards reviewer, and the release notes skill.",
+  "category": "engineering",
+  "author": {
+    "name": "Agent platform"
+  },
+  "agents": "agents/",
+  "skills": "skills/"
+}
