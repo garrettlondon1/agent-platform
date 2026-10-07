@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Nullable>disable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NuGetAudit>false</NuGetAudit>
+    <!-- The SDK marks managed settings, permission requests and session events [Experimental]. We depend on them on purpose. -->
+    <NoWarn>$(NoWarn);FS0057</NoWarn>
+  </PropertyGroup>
+</Project>

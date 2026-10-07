@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/examples/" />
+  <Folder Name="/examples/contoso/">
+    <Project Path="examples/contoso/Contoso.Platform.fsproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/AgentPlatform/AgentPlatform.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgentPlatform.Tests/AgentPlatform.Tests.fsproj" />
+  </Folder>
+</Solution>

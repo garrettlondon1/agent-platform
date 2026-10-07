@@ -1,0 +1,5 @@
+bin/
+obj/
+.platform/
+.platform-data/
+drift/

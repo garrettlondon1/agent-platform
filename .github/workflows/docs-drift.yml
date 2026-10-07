@@ -1,0 +1,82 @@
+# Is the DSL still describing what GitHub ships? Every day, compare the typed model with the
+# current documentation (github/docs) and the agentic workflows compiler (github/gh-aw).
+# On drift: open (or update) an issue with the report. Optionally hand it to the self-update agentic workflow,
+# which edits the F#: set the repository variable AGENTP_SELF_UPDATE=true and a COPILOT_GITHUB_TOKEN secret.
+name: docs-drift
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      drifted: ${{ steps.check.outputs.drifted }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: "10.0.x"
+      - name: Current GitHub documentation
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/github/docs.git /tmp/docs
+          git -C /tmp/docs sparse-checkout set content/copilot src/rest/data data/variables data/reusables/copilot
+          git clone -q --depth 1 https://github.com/github/gh-aw.git /tmp/gh-aw
+          echo "docs $(git -C /tmp/docs rev-parse --short HEAD), gh-aw $(git -C /tmp/gh-aw rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare
+        id: check
+        run: |
+          set +e
+          dotnet run --project examples/contoso/Contoso.Platform.fsproj -c Release -- drift --docs /tmp/docs --gh-aw /tmp/gh-aw --out drift
+          code=$?
+          set -e
+          cat drift/report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ $code -eq 2 ]; then echo "drifted=true" >> "$GITHUB_OUTPUT"; elif [ $code -ne 0 ]; then exit $code; else echo "drifted=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: drift
+          path: drift/
+
+  report:
+    needs: drift
+    if: needs.drift.outputs.drifted == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: drift
+          path: drift
+      - name: Open or update the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          { echo "GitHub documented governance surface the DSL does not model yet ([run]($RUN_URL))."; echo; cat drift/report.md; } > body.md
+          existing=$(gh issue list -R "$REPO" --state open --search "in:title \"DSL drift\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then gh issue edit "$existing" -R "$REPO" --body-file body.md; else gh issue create -R "$REPO" --title "DSL drift: GitHub documented new governance surface" --body-file body.md; fi
+
+  hand-off:
+    needs: drift
+    if: needs.drift.outputs.drifted == 'true' && vars.AGENTP_SELF_UPDATE == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Start the self-update agentic workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh workflow run agentp-self-update.lock.yml -R "$REPO" -f drift_run_id="$RUN_ID"

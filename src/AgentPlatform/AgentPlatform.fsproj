@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- AgentPlatform: the typed vocabulary for governing every Copilot agent an organisation runs,
+       and everything that turns one definition into assets for every surface. -->
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <PackageId>AgentPlatform</PackageId>
+    <Version>0.2.0</Version>
+    <Description>Strongly typed F# governance for GitHub Copilot agents: managed settings, plugins, skills, hooks, MCP, standards, agents, agentic workflows, rulesets.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>Garrett London</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/garrettlondon1/agent-platform</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/garrettlondon1/agent-platform</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>    <PackageTags>github;copilot;agents;governance;managed-settings;mcp;hooks;fsharp;dsl</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+    <NoWarn>$(NoWarn);FS3390</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Json.fs" />
+    <Compile Include="Policy.fs" />
+    <Compile Include="HookEvents.fs" />
+    <Compile Include="Hooks.fs" />
+    <Compile Include="RuleFile.fs" />
+    <Compile Include="Mcp.fs" />
+    <Compile Include="Standards.fs" />
+    <Compile Include="Plugins.fs" />
+    <Compile Include="Agents.fs" />
+    <Compile Include="Governance.fs" />
+    <Compile Include="Platform.fs" />
+    <Compile Include="Render.fs" />
+    <Compile Include="Service.fs" />
+    <Compile Include="Sdk.fs" />
+    <Compile Include="Sessions.fs" />
+    <Compile Include="Evals.fs" />
+    <Compile Include="Drift.fs" />
+    <Compile Include="Deploy.fs" />
+    <Compile Include="Vocabulary.fs" />
+    <Compile Include="Cli.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.16" />
+  </ItemGroup>
+
+</Project>

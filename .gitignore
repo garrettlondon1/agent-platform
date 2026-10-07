@@ -1,0 +1,15 @@
+bin/
+obj/
+out/
+TestResults/
+*.user
+
+# Rendered output and local runtime data (the hook service's private CA key and recorded sessions live here)
+.platform/
+.platform-*/
+drift/
+*.pfx
+*.key
+
+proof/out/
+proof/aw-logs/

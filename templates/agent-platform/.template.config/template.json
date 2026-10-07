@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "AgentPlatform",
+  "classifications": [ "GitHub", "Copilot", "Agents", "Governance" ],
+  "identity": "AgentPlatform.Templates.Platform",
+  "name": "GitHub Copilot agent platform",
+  "description": "A governed agent platform for one GitHub organization: managed settings, plugins, skills, hooks, MCP, standards, agents and agentic workflows, defined in F#.",
+  "shortName": "agent-platform",
+  "sourceName": "Acme.Platform",
+  "preferNameDirectory": true,
+  "tags": { "language": "F#", "type": "project" },
+  "symbols": {
+    "org": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "GitHub organization that owns .github-private and the plugin marketplace.",
+      "replaces": "acme-org",
+      "defaultValue": "acme-org"
+    },
+    "enterprise": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "GitHub enterprise slug (leave empty if the organization is not in an enterprise).",
+      "replaces": "acme-enterprise",
+      "defaultValue": "acme-enterprise"
+    },
+    "host": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "HTTPS base URL of the platform service (hook decisions, OTLP collector, MCP registry).",
+      "replaces": "https://agents.acme.example",
+      "defaultValue": "https://agents.acme.example"
+    },
+    "company": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "Display name used in rendered instructions and READMEs.",
+      "replaces": "Acme Corp",
+      "defaultValue": "Acme Corp"
+    },
+    "frameworkVersion": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "AgentPlatform package version.",
+      "replaces": "0.1.0-framework",
+      "defaultValue": "0.2.0"
+    }
+  }
+}

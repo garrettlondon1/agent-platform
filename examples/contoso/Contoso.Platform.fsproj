@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Contoso's agent platform. "dotnet run render" writes every asset; CI does the rest. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>contoso-platform</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Platform.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgentPlatform\AgentPlatform.fsproj" />
+  </ItemGroup>
+
+</Project>

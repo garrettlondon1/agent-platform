@@ -1,0 +1,229 @@
+# Acme Corp agent platform: one F# definition in, every asset out, deployed as reviewed commits.
+#
+#   pull request  -> validate, render, show what changes (assets + GitHub settings plan) as a PR comment
+#                    (the `render` job is the required check that protects this repository)
+#   push to main  -> render, publish each rendered tree to the repository that serves it,
+#                    compile the agentic workflows, apply GitHub settings, open baseline PRs in every repo
+#   every 6 hours -> the same deploy: any hand edit to a rendered repo or a GitHub setting is put back
+#   an issue      -> label it `platform-change` and the platform-change agent proposes the PR (platform-change.md)
+#
+# One-time setup (see README.md):
+#   repos    .github-private, copilot-plugins, agentic-workflows, platform-endpoints (created once by an admin)
+#   vars     PLATFORM_APP_ID                     a GitHub App installed on the organization (the deploy job only
+#   secrets  PLATFORM_APP_KEY                    runs when it is set; until then organization owners deploy with
+#                                                `dotnet run -- publish` and `dotnet run -- apply` from the gh CLI).
+#            Store both in the "production" environment and add required reviewers so every deploy is approved.
+#   vars     PLATFORM_BASELINE_ROLLOUT = "true"  (optional) open baseline PRs in every repository
+#
+# Hardening: actions pinned to full commit SHAs (Dependabot keeps them current), the default GITHUB_TOKEN
+# has no permissions, each job asks only for what it uses, the app token is scoped to exactly the
+# permissions each API needs, and no ${{ }} expression is expanded inside a shell script.
+name: agent-platform
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: "17 */6 * * *"   # reconcile: rendered repos and settings are re-applied from the definition
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: agent-platform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Validate
+        run: dotnet run -c Release -- validate
+
+      - name: Render
+        run: dotnet run -c Release --no-build -- render --out rendered --clean
+
+      - name: What changed since the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add -q /tmp/base "$BASE_SHA"
+          if (cd /tmp/base && dotnet run -c Release -- render --out /tmp/base-rendered --clean >/dev/null 2>&1); then
+            dotnet run -c Release --no-build -- diff --against /tmp/base-rendered | tee assets.txt || true
+          else
+            echo "(base branch has no renderable platform yet)" | tee assets.txt
+          fi
+
+      # Pull requests run with the workflow token, which cannot read enterprise or ruleset settings: those show as
+      # ACCESS lines ("partial plan"). PLATFORM_READ_TOKEN may be a fine-grained token with READ-ONLY organization
+      # permissions (Copilot agent settings, content exclusion). Never give a pull request job a token that can write
+      # settings: anyone who can open a pull request could use it.
+      - name: GitHub settings plan
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_READ_TOKEN || github.token }}
+        run: dotnet run -c Release --no-build -- plan | tee plan.txt || true
+
+      - name: Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const read = f => fs.existsSync(f) ? fs.readFileSync(f, 'utf8').slice(0, 30000) : '';
+            const lock = JSON.parse(fs.readFileSync('rendered/platform.lock.json', 'utf8'));
+            const body = [
+              `### Agent platform ${lock.version}`,
+              '', '**Rendered assets that change**', '```', read('assets.txt'), '```',
+              '', '**GitHub settings plan**', '```', read('plan.txt'), '```'
+            ].join('\n');
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rendered-platform
+          path: rendered/
+          retention-days: 90
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.PLATFORM_APP_ID != ''
+    needs: render
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: rendered-platform
+          path: rendered
+
+      - name: GitHub App token
+        id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.PLATFORM_APP_ID }}
+          private-key: ${{ secrets.PLATFORM_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Exactly what the steps below call (permission names from the GitHub Apps permission reference).
+          permission-contents: write                              # publish rendered repos, baseline branches
+          permission-workflows: write                             # rendered trees contain .github/workflows
+          permission-pull-requests: write                         # baseline pull requests
+          permission-organization-administration: write           # organization rulesets
+          permission-organization-copilot-agent-settings: write   # cloud agent repository access
+          permission-org-copilot-content-exclusion: write         # content exclusion
+          permission-organization-agent-variables: write          # cloud agent variables
+          permission-organization-actions-variables: write        # agentic workflow policy variables
+
+      - name: Publish rendered repositories
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version rendered/platform.lock.json)
+          publish() {   # publish <rendered dir> <repository>
+            local src=$1 repo=$2
+            gh repo view "$ORG/$repo" >/dev/null 2>&1 || { echo "::error::create $ORG/$repo first (see README)"; exit 1; }
+            rm -rf "/tmp/$repo"
+            git clone -q "https://x-access-token:${GH_TOKEN}@github.com/$ORG/$repo.git" "/tmp/$repo"
+            cd "/tmp/$repo"
+            git checkout -q -B main
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            cp -r "$GITHUB_WORKSPACE/rendered/$src/." .
+            git add -A
+            if git -c user.name=agent-platform -c user.email=agent-platform@users.noreply.github.com commit -qm "Agent platform $version (${GITHUB_SHA::7})"; then
+              git tag -f "v$version"
+              git push -q origin main
+              git push -q -f origin "v$version"
+              echo "published $ORG/$repo $version"
+            else
+              echo "$ORG/$repo unchanged"
+            fi
+            cd "$GITHUB_WORKSPACE"
+          }
+          # The marketplace first: agentic workflows pin plugins to its commit SHAs when they compile.
+          publish copilot-plugins copilot-plugins
+          publish .github-private .github-private
+          publish agentic-workflows agentic-workflows
+          publish endpoints platform-endpoints
+
+      - name: Compile agentic workflows
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_AW_VERSION: v0.89.21   # pin gh-aw; bump deliberately, like any compiler
+        run: |
+          gh extension install github/gh-aw --pin "$GH_AW_VERSION"
+          cd /tmp/agentic-workflows
+          gh aw compile --strict
+          git add -A
+          git -c user.name=agent-platform -c user.email=agent-platform@users.noreply.github.com commit -qm "Compile agentic workflows" && git push -q origin main || echo "lock files unchanged"
+
+      - name: Agentic workflow defaults and policy
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          gh aw env update rendered/agentic-workflows/aw-defaults.yml --scope org --org "$ORG" --yes
+          jq -r 'to_entries[] | "\(.key)\t\(.value)"' rendered/agentic-workflows/aw-policy.json | while IFS=$'\t' read -r k v; do
+            gh variable set "$k" --org "$ORG" --body "$v"
+          done
+
+      - name: Apply GitHub settings
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: dotnet run -c Release -- apply
+
+      - name: Repository baseline pull requests
+        if: vars.PLATFORM_BASELINE_ROLLOUT == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+          SELF: ${{ github.event.repository.name }}
+        run: |
+          version=$(jq -r .version rendered/platform.lock.json)
+          for repo in $(gh repo list "$ORG" --no-archived --limit 1000 --json name,isFork --jq '.[] | select(.isFork | not) | .name'); do
+            case "$repo" in .github-private|copilot-plugins|agentic-workflows|platform-endpoints|"$SELF") continue ;; esac
+            rm -rf /tmp/b
+            git clone -q --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/$ORG/$repo.git" /tmp/b 2>/dev/null || continue
+            cd /tmp/b
+            git checkout -q -B agent-platform/baseline
+            cp -r "$GITHUB_WORKSPACE/rendered/repo-baseline/." .
+            git add -A
+            if git -c user.name=agent-platform -c user.email=agent-platform@users.noreply.github.com commit -qm "Agent platform baseline $version"; then
+              git push -q -f origin agent-platform/baseline
+              gh pr view agent-platform/baseline -R "$ORG/$repo" >/dev/null 2>&1 || \
+                gh pr create -R "$ORG/$repo" --head agent-platform/baseline --title "Agent platform baseline $version" \
+                  --body "Copilot instructions, AGENTS.md and agent hooks, managed centrally by the agent platform." >/dev/null
+              echo "baseline PR: $repo"
+            fi
+            cd "$GITHUB_WORKSPACE"
+          done
+
+      - name: Manual steps (no API exists for these)
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: dotnet run -c Release --no-build -- plan | grep '  manual' >> "$GITHUB_STEP_SUMMARY" || true
