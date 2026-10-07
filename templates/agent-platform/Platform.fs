@@ -129,6 +129,15 @@ let everyone =
         telemetry (otlp "" |> lockedContent)
     }
 
+/// A team file: members of these enterprise teams may replace what `everyone` marks ...ByDefault.
+/// Run `dotnet run -- whatif --teams ai-pioneers` to see exactly what a member gets.
+let aiPioneers =
+    teamOverride {
+        named "ai-pioneers"
+        forEnterpriseTeams [ "ai-pioneers" ]
+        overriding (policy { unmanagedModel })
+    }
+
 // ---------------------------------------------------------------------------
 // GitHub settings
 // ---------------------------------------------------------------------------
@@ -169,6 +178,7 @@ let definition =
         definitionRepo "agent-platform"
 
         governedBy everyone
+        teams [ aiPioneers ]
         standards [ engineering ]
         mcpCatalog catalog
         hooks guardrails

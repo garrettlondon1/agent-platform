@@ -71,6 +71,7 @@ dotnet run -- validate        every problem with the definition, before anything
 dotnet run -- render          write every asset to .platform/ (deterministic, with platform.lock.json)
 dotnet run -- diff --against <dir>   what changed since a previous render
 dotnet run -- coverage        which control reaches which surface
+dotnet run -- whatif --teams a,b     the managed settings a member of those enterprise teams gets
 dotnet run -- vocabulary      every builder, operation and choice this version of the DSL accepts
 dotnet run -- plan            what GitHub settings would change (read-only; unreadable settings show as ACCESS)
 dotnet run -- apply           apply that plan (rulesets, cloud agent access, content exclusion, variables, ...)
@@ -125,6 +126,39 @@ Copilot settings). Everyone else is unaffected until they switch, or until devic
 After that, every change is a pull request to `Platform.fs`. CI comments the assets that change and the settings plan;
 merging deploys it.
 
+## Managed settings, every key
+
+Plain operations **enforce** a value. `...ByDefault` operations set an enterprise default wrapped in `overridable`, which
+enterprise teams may replace. `unmanaged...` operations (team files only) hand a key back to users.
+
+| Managed key | `policy { }` |
+| --- | --- |
+| `model` | `model` / `modelByDefault` / `unmanagedModel` |
+| `autoTier` | `autoTier` / `autoTierByDefault` / `unmanagedAutoTier` (teams may only tighten an enforced tier) |
+| `effortLevel`, `contextTier` | `effortLevel "high"`, `contextTier LongContext` (applied with `model`) |
+| `permissions.disableBypassPermissionsMode` | `noBypassMode` / `noBypassModeByDefault` / `assistedApprovalOnly` (`"allow-auto-only"`) / `allowBypassMode` |
+| `permissions.deny` / `ask` / `allow` | `deny` / `ask` / `allow` (+ `ByDefault`) with `shell`, `powershell`, `read`, `edit` / `write`, `domain` |
+| `features.computerUse` | `computerUse false` |
+| `enabledPlugins` | every platform plugin automatically; `enablePlugins` / `blockPlugins`; a team's `addPlugins` |
+| `extraKnownMarketplaces` | the platform marketplace automatically; `marketplaces` / `marketplacesByDefault` with `autoUpdating` / `neverAutoUpdating` |
+| `strictKnownMarketplaces` | the platform marketplace automatically; `onlyMarketplaces` with `github`, `gitUrl`, `urlSource(WithHeaders)`, `npm`, `directory`, `hostPattern`, `pathPattern` (`[]` = lockdown) |
+| `allowedMcpServers` / `deniedMcpServers` | from the MCP catalog automatically; `allowMcp` / `denyMcp` (+ `ByDefault`) with `serverUrl`, `serverCommand`, `serverName` |
+| `telemetry` | `telemetry (otlp "" \|> lockedContent \|> serviceNamed ... \|> withAttributes ... \|> withHeaders ...)` |
+| `remoteControl` | `remoteControl RemoteDisabled` / `RemoteEnabled` / `requireSso [ orgs ]` |
+| `sandbox` | `sandboxed` / `sandboxedByDefault (sandbox { required; failClosed; noBypass; ... })`, including `learning RecordAndAllow` (Windows native MDM only) |
+| `shellShortcut` | `shellShortcut false` |
+| `policyHelper` | `policyHelper (helperAt "/usr/local/bin/copilot-policy")` |
+| `forceLoginOrgs` | `onlySignInTo [ "acme" ]` (device files and MDM only; never written to `.github-private`) |
+| `forceRemoteSettingsRefresh` | `alwaysRefreshServerSettings` |
+
+**Teams.** `validate` enforces the documented team rules: a team file may only set keys the enterprise marks
+`overridable`, a tighter `autoTier` and additive `enabledPlugins`; it cannot switch an enterprise plugin off; a replaced
+marketplace map must keep the defaults it still needs; `strictKnownMarketplaces []` is a lockdown, not "unmanaged".
+
+**Several teams.** "If a user belongs to multiple teams, their team files are combined using the least restrictive value
+for each key." `whatif --teams payments-eng,ai-pioneers` prints the managed settings that person actually gets, and
+warns where "least restrictive" is ambiguous (two different default models).
+
 ## Rolling out safely, and keeping it tamper-proof
 
 **One line sets how hard it bites.** `rollout Observe | Guard | Enforce` - the same definition at every stage:
@@ -172,7 +206,8 @@ Bump `<Version>` in both projects for every release; NuGet caches a version fore
 
 | Builder | Says | Renders |
 | --- | --- | --- |
-| `policy { }` | every documented managed-settings key; `deny` enforces, `denyByDefault` lets enterprise teams override | `managed-settings.json`, team files, file-based and MDM payloads |
+| `policy { }` | every documented managed-settings key (the enterprise reference and the Copilot CLI table); `deny` enforces, `denyByDefault` lets enterprise teams override | `managed-settings.json`, file-based and MDM payloads |
+| `teamOverride { }` | one `copilot/teams/<name>.json`: the enterprise teams it maps to, the overridden values, plugins only that team gets | `team-mappings.json`, `teams/*.json` |
 | `standard { }` | coding standards, optionally `appliesTo` globs | `copilot-instructions.md`, `*.instructions.md`, `AGENTS.md`, plugin skills, SDK system message, org instructions text |
 | `mcpServer { }` / `mcp { }` | the approved MCP catalog and the blocklist | `allowedMcpServers` / `deniedMcpServers`, a v0.1 MCP registry, cloud agent MCP config, agent `mcp-servers`, plugin `.mcp.json`, gh-aw `mcp-servers:` |
 | `hooks { }` | rules (`beforeTool`, `afterTool`, `on`) and capture | plugin `hooks.json`, machine `policy.d`, repository `.github/hooks`, `hook-rules.json` for the service |

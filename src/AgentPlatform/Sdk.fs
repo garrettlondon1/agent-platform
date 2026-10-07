@@ -72,7 +72,7 @@ let managedSettings (p: Policy) =
                 Deny = rules p.Deny,
                 Ask = rules p.Ask,
                 Allow = rules p.Allow,
-                DisableBypassPermissionsMode = (match p.DisableBypass with Some(Enforced Disable | Overridable Disable) -> "disable" | _ -> null)
+                DisableBypassPermissionsMode = (match p.DisableBypass |> Option.bind settingValue with Some b -> b.Text | None -> null)
             )
     )
 

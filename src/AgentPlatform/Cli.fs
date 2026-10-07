@@ -143,6 +143,18 @@ let hookTestCmd (p: Platform) (args: string array) =
         for w in v.WouldHave do eprintfn $"observe: {w}"
         0
 
+/// The managed settings one person actually gets, given the enterprise teams they belong to.
+let whatIfCmd (p: Platform) (args: string array) =
+    let teams =
+        opt args "--teams" |> Option.map (fun s -> s.Split([| ',' |], StringSplitOptions.RemoveEmptyEntries) |> Array.map _.Trim() |> List.ofArray) |> Option.defaultValue []
+    let pol, files, warnings = effectiveForMember p teams
+    let who = if teams.IsEmpty then "a member of no mapped enterprise team" else "a member of " + String.Join(", ", teams)
+    let via = if files.IsEmpty then "managed-settings.json only" else "managed-settings.json + teams/" + String.Join(", teams/", files |> List.map (fun f -> f + ".json"))
+    eprintfn $"{who}: {via}"
+    for w in warnings do eprintfn $"  ! {w}"
+    printfn "%s" (render (Policy.toJson (Policy.forServer pol)))
+    0
+
 let driftCmd (args: string array) =
     match opt args "--docs" with
     | None -> fail [ "drift needs --docs <path to a github/docs clone>" ]
@@ -240,7 +252,8 @@ let run (p: Platform) (argv: string array) =
     | Some "drift" -> driftCmd argv
     | Some "sdk" -> sdkCmd p argv
     | Some "evals" -> evalsCmd p argv
+    | Some "whatif" -> whatIfCmd p argv
     | Some "vocabulary" -> printf "%s" (Vocabulary.markdown ()); 0
     | _ ->
-        printfn "usage: validate | render [--out dir] | diff --against <dir> | coverage | plan | apply | publish [--from .platform] | serve [--port n] | hook-test <event> | sdk <agent> <prompt> | drift --docs <dir> | evals --data <dir> | vocabulary"
+        printfn "usage: validate | render [--out dir] | diff --against <dir> | coverage | plan | apply | publish [--from .platform] | serve [--port n] | hook-test <event> | sdk <agent> <prompt> | drift --docs <dir> | evals --data <dir> | vocabulary | whatif [--teams a,b]"
         if argv.Length = 0 then 0 else 1

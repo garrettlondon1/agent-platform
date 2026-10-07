@@ -289,8 +289,11 @@ let everyone =
         computerUse false
         modelByDefault "auto"
         autoTierByDefault Balance
+        effortLevel "medium"
         noBypassModeByDefault
-        denyByDefault [ read "~/.ssh/**"; read "~/.aws/**"; read "**/.env"; edit "//etc/**"; shell "git push --force *"; domain "pastebin.com" ]
+        shellShortcut false
+        alwaysRefreshServerSettings
+        denyByDefault [ read "~/.ssh/**"; read "~/.aws/**"; read "**/.env"; edit "//etc/**"; shell "git push --force *"; powershell "Remove-Item -Recurse -Force *"; domain "pastebin.com" ]
         askByDefault [ shell "git push *"; shell "terraform apply *"; edit "/.github/workflows/**" ]
         allowByDefault [
             read "/**"; edit "/src/**"; edit "/test/**"; edit "/tests/**"; edit "/docs/**"
@@ -303,15 +306,36 @@ let everyone =
         sandboxedByDefault standardSandbox
     }
 
+/// Each team file may only change what `everyone` marks ...ByDefault, tighten autoTier, and add plugins.
 let payments =
-    policy {
-        autoTier Efficiency
-        deny [ read "~/.ssh/**"; read "**/.env"; read "**/cardholder/**"; shell "curl *"; shell "git push --force *" ]
-        allow [ read "/src/**"; read "/test/**"; shell "git status *"; shell "git diff *"; shell "dotnet test *" ]
-        sandboxed paymentsSandbox
+    teamOverride {
+        named "payments"
+        forEnterpriseTeams [ "payments-eng"; "payments-contractors" ]
+        overriding (
+            policy {
+                autoTier Efficiency
+                deny [ read "~/.ssh/**"; read "**/.env"; read "**/cardholder/**"; shell "curl *"; shell "git push --force *" ]
+                allow [ read "/src/**"; read "/test/**"; shell "git status *"; shell "git diff *"; shell "dotnet test *" ]
+                sandboxed paymentsSandbox
+            }
+        )
     }
 
-let platformTeam = policy { autoTier Intelligence }
+let platformTeam =
+    teamOverride {
+        named "platform"
+        forEnterpriseTeams [ "platform-eng" ]
+        // Platform engineers keep LLM-assisted approval (no full allow-all).
+        overriding (policy { assistedApprovalOnly })
+    }
+
+let aiPioneers =
+    teamOverride {
+        named "ai-pioneers"
+        forEnterpriseTeams [ "ai-pioneers" ]
+        // Early adopters choose their own model and tier.
+        overriding (policy { unmanagedModel; unmanagedAutoTier })
+    }
 
 // ---------------------------------------------------------------------------
 // GitHub settings: rulesets, content exclusion, cloud agent
@@ -355,8 +379,7 @@ let contoso =
         version "2026.10.1"
 
         governedBy everyone
-        team "payments" [ "payments-eng" ] payments
-        team "platform" [ "platform-eng" ] platformTeam
+        teams [ payments; platformTeam; aiPioneers ]
 
         standards [ everywhere; dotnet; infrastructure ]
         mcpCatalog catalog

@@ -46,7 +46,27 @@ type Deployer =
     /// definition pull requests, but still only through a pull request that passed validation.
     | OrganizationOwners
 
-type Team = { Name: string; EnterpriseTeams: string list; Policy: Policy }
+type Team = { Name: string; EnterpriseTeams: string list; Policy: Policy; Plugins: Plugin list }
+
+/// teamOverride { } - one teams/<name>.json file and the enterprise teams it maps to.
+///
+///     teamOverride {
+///         named "payments"                          // copilot/teams/payments.json
+///         forEnterpriseTeams [ "payments-eng" ]     // team-mappings.json entry
+///         overriding (policy { ... })               // only keys the enterprise marked overridable, tighter autoTier
+///         addPlugins [ securityTools ]              // enabledPlugins is additive for team members
+///     }
+type TeamOverrideBuilder() =
+    member _.Yield(_: unit) = { Name = ""; EnterpriseTeams = []; Policy = empty; Plugins = [] }
+    [<CustomOperation "named">] member _.Named(t: Team, n) = { t with Name = n }
+    /// Enterprise team slugs (with or without the ent: prefix) whose members receive this file.
+    [<CustomOperation "forEnterpriseTeams">] member _.For(t: Team, slugs: string list) = { t with EnterpriseTeams = t.EnterpriseTeams @ slugs }
+    /// The overridden values. Write plain values (`model "x"`, `deny [...]`) or `unmanaged...` to hand a key back to users.
+    [<CustomOperation "overriding">] member _.Overriding(t: Team, p: Policy) = { t with Policy = p }
+    /// Plugins from the platform marketplace that only this team receives (on top of everyone's).
+    [<CustomOperation "addPlugins">] member _.Plugins(t: Team, ps: Plugin list) = { t with Plugins = t.Plugins @ ps }
+
+let teamOverride = TeamOverrideBuilder()
 
 type Platform = {
     Name: string
@@ -129,7 +149,9 @@ type PlatformBuilder() =
     [<CustomOperation "administeredBy">] member _.Admins(p: Platform, team: string) = { p with AdminTeam = Some team }
     [<CustomOperation "definitionRepo">] member _.DefinitionRepo(p: Platform, r: string) = { p with DefinitionRepo = r }
     [<CustomOperation "governedBy">] member _.Policy(p: Platform, pol) = { p with Policy = pol }
-    [<CustomOperation "team">] member _.Team(p: Platform, name, enterpriseTeams, pol) = { p with Teams = p.Teams @ [ { Name = name; EnterpriseTeams = enterpriseTeams; Policy = pol } ] }
+    [<CustomOperation "team">] member _.Team(p: Platform, name, enterpriseTeams, pol) = { p with Teams = p.Teams @ [ { Name = name; EnterpriseTeams = enterpriseTeams; Policy = pol; Plugins = [] } ] }
+    /// Typed team override files: `teams [ teamOverride { ... }; teamOverride { ... } ]`.
+    [<CustomOperation "teams">] member _.Teams(p: Platform, ts: Team list) = { p with Teams = p.Teams @ ts }
     [<CustomOperation "standards">] member _.Standards(p: Platform, s) = { p with Standards = p.Standards @ s }
     [<CustomOperation "mcpCatalog">] member _.Mcp(p: Platform, c) = { p with Mcp = c }
     [<CustomOperation "hooks">] member _.Hooks(p: Platform, h) = { p with Hooks = h }
@@ -220,8 +242,12 @@ let staged (p: Platform) : Platform =
                 | teams ->
                     let m = marketplace p
                     let hookPlugins = p.Plugins |> List.filter _.CarriesHooks |> List.map (fun pl -> pluginId m pl, true)
-                    [ { Name = hookPilotTeam; EnterpriseTeams = teams; Policy = { empty with EnabledPlugins = hookPlugins } } ]
-            (p.Teams |> List.filter (fun t -> t.Name <> hookPilotTeam)) @ pilot
+                    [ { Name = hookPilotTeam; EnterpriseTeams = teams; Policy = { empty with EnabledPlugins = hookPlugins }; Plugins = [] } ]
+            let m = marketplace p
+            // A team's own plugins become additive enabledPlugins entries in its file.
+            let withPlugins (t: Team) =
+                { t with Policy = { t.Policy with EnabledPlugins = t.Policy.EnabledPlugins @ (t.Plugins |> List.map (fun pl -> pluginId m pl, true)) |> List.distinctBy fst } }
+            (p.Teams |> List.filter (fun t -> t.Name <> hookPilotTeam) |> List.map withPlugins) @ pilot
             |> List.map (fun t -> { t with Policy = stagePolicy p.Rollout t.Policy })
         Hooks =
             if p.Rollout = Observe then { p.Hooks with Rules = p.Hooks.Rules |> List.map (fun r -> { r with Then = observeAction r.Then }) }
@@ -238,8 +264,10 @@ let staged (p: Platform) : Platform =
 let resolvedPolicy (p: Platform) : Policy =
     let m = marketplace p
     let pol = p.Policy
-    // With a pilot ring the hook plugins are enabled only in the pilot team file, not for everyone.
-    let everyone = p.Plugins |> List.filter (fun pl -> p.HookPilotTeams.IsEmpty || not pl.CarriesHooks)
+    // With a pilot ring the hook plugins are enabled only in the pilot team file, not for everyone; plugins a team
+    // adds are enabled only in that team's file.
+    let teamOnly = p.Teams |> List.collect _.Plugins |> List.map _.Name |> Set.ofList
+    let everyone = p.Plugins |> List.filter (fun pl -> (p.HookPilotTeams.IsEmpty || not pl.CarriesHooks) && not (teamOnly.Contains pl.Name))
     let enabled = pol.EnabledPlugins @ (everyone |> List.map (fun pl -> pluginId m pl, true)) |> List.distinctBy fst
     let known = { Name = m.Name; Source = GitHubRepo(m.Repo, Some m.Ref, None); AutoUpdate = Some true }
     let marketplaces =
@@ -281,8 +309,23 @@ let resolvedPolicy (p: Platform) : Policy =
     if p.Rollout = Observe then { resolved with McpAllow = None; StrictMarketplaces = None } else resolved
 
 let effectivePolicy (p: Platform) (team: string option) =
+    let p = staged p
     let teamPolicy = team |> Option.bind (fun t -> p.Teams |> List.tryFind (fun x -> x.Name = t)) |> Option.map _.Policy
     effective (resolvedPolicy p) teamPolicy
+
+/// What a person who belongs to these enterprise teams gets on the server-managed path: every team file mapped to any
+/// of the slugs, combined least-restrictively, then applied beneath the enterprise settings.
+let effectiveForMember (p: Platform) (enterpriseTeams: string list) =
+    let p = staged p
+    let norm (s: string) = (if s.StartsWith "ent:" then s.Substring 4 else s).ToLowerInvariant()
+    let mine = enterpriseTeams |> List.map norm |> Set.ofList
+    let files = p.Teams |> List.filter (fun t -> t.EnterpriseTeams |> List.exists (norm >> mine.Contains))
+    match files with
+    | [] -> effective (resolvedPolicy p) None, [], []
+    | [ t ] -> effective (resolvedPolicy p) (Some t.Policy), [ t.Name ], []
+    | many ->
+        let combined, warnings = combineTeams (many |> List.map (fun t -> t.Name, t.Policy))
+        effective (resolvedPolicy p) (Some combined), many |> List.map _.Name, warnings
 
 let standardsNamed (p: Platform) names = p.Standards |> List.filter (fun s -> List.contains s.Name names)
 let serversNamed (p: Platform) keys = p.Mcp.Servers |> List.filter (fun s -> List.contains s.Key keys)
@@ -306,6 +349,28 @@ let validate (p: Platform) : string list = [
         yield! validateTeam pol t.Name t.Policy
         yield! validateSandboxPaths $"teams/{t.Name}.json" t.Policy
         if t.EnterpriseTeams.IsEmpty then $"team {t.Name}: map it to at least one enterprise team slug."
+        if t.Name = "" then "teamOverride: every team file needs a name (it becomes copilot/teams/<name>.json)."
+        elif not (Text.RegularExpressions.Regex.IsMatch(t.Name, "^[A-Za-z0-9._-]+$")) then
+            $"team {t.Name}: the name becomes a file name; use letters, digits, ., _ and - only."
+        // "enabledPlugins works additively": a team can add plugins, not switch the enterprise's off.
+        for id, on in t.Policy.EnabledPlugins do
+            if not on && pol.EnabledPlugins |> List.exists (fun (e, v) -> e = id && v) then
+                $"team {t.Name}: enabledPlugins is additive for teams, so '{id}: false' cannot turn off a plugin the enterprise enables."
+        for pl in t.Plugins do
+            if not (p.Plugins |> List.exists (fun x -> x.Name = pl.Name)) then
+                $"team {t.Name}: addPlugins uses '{pl.Name}', which is not in the platform's plugins (the marketplace)."
+        // "A team file's marketplace map replaces the default ... Include any default marketplaces that the team should retain."
+        match t.Policy.Marketplaces, pol.Marketplaces with
+        | Some(Enforced teamMs), Some(Overridable entMs) ->
+            for m in entMs do
+                if not (teamMs |> List.exists (fun x -> x.Name = m.Name)) then
+                    $"team {t.Name}: its extraKnownMarketplaces replaces the enterprise's and drops '{m.Name}' - team members lose plugins from it. Include it to keep it."
+        | _ -> ()
+        match t.Policy.StrictMarketplaces with
+        | Some(Enforced []) -> $"team {t.Name}: strictKnownMarketplaces [] is a complete lockdown (no marketplace at all), not 'unmanaged'."
+        | _ -> ()
+    for n, c in p.Teams |> List.countBy _.Name do
+        if c > 1 then $"team {n}: defined twice."
     yield! Standards.validate p.Standards
     yield! Mcp.validate p.Mcp
     yield! Plugins.validate (marketplace p)

@@ -243,14 +243,14 @@ let rulesJson (p: Platform) =
 
 let githubPrivate (p: Platform) = [
     let pol = resolvedPolicy p
-    file ".github-private/copilot/managed-settings.json" (render (toJson pol))
+    file ".github-private/copilot/managed-settings.json" (render (toJson (forServer pol)))
     if not p.Teams.IsEmpty then
         // Enterprise team slugs carry an `ent:` prefix (teams-in-an-enterprise.md) while the team-mapping docs show
         // bare slugs; both spellings are listed so the mapping matches whichever the server compares.
         let bothForms (slug: string) = if slug.StartsWith "ent:" then [ slug.Substring 4; slug ] else [ slug; "ent:" + slug ]
         file ".github-private/copilot/team-mappings.json" (p.Teams |> List.map (fun t -> $"{t.Name}.json", strs (t.EnterpriseTeams |> List.collect bothForms)) |> objOf |> render)
     for t in p.Teams do
-        file $".github-private/copilot/teams/{t.Name}.json" (render (toJson t.Policy))
+        file $".github-private/copilot/teams/{t.Name}.json" (render (toJson (forServer t.Policy)))
     for a in p.Agents do
         file $".github-private/agents/{a.Name}.md" (profile p a)
     for s in p.OrganizationSkills do
@@ -502,7 +502,7 @@ let endpoints (p: Platform) (published: DateTimeOffset) = [
 // ---------------------------------------------------------------------------
 
 let mdmValues (pol: Policy) =
-    let groups = set [ "permissions"; "sandbox"; "telemetry"; "remoteControl"; "features" ]
+    let groups = set [ "permissions"; "sandbox"; "telemetry"; "remoteControl"; "features"; "policyHelper" ]
     let text (n: JsonNode) =
         match n with
         | :? JsonValue as v when v.GetValueKind() = Text.Json.JsonValueKind.String -> v.GetValue<string>()
@@ -517,7 +517,7 @@ let mdmValues (pol: Policy) =
 
 let workstation (p: Platform) =
     let pol = resolvedPolicy p
-    let json = render (toJson (flatten pol))
+    let json = render (toJson (forFile (flatten pol)))
     let policyHooks = render (hooksJson p "policy-hook" false)
     let mdm = mdmValues pol
     let regEsc (s: string) = s.Replace("\\", "\\\\").Replace("\"", "\\\"")

@@ -36,6 +36,10 @@ let known: Snapshot =
         [ "autoTier"; "allowedMcpServers"; "deniedMcpServers"; "enabledPlugins"; "extraKnownMarketplaces"; "features.computerUse"; "model"
           "permissions.allow"; "permissions.ask"; "permissions.deny"; "permissions.disableBypassPermissionsMode"; "remoteControl"; "sandbox"
           "strictKnownMarketplaces"; "telemetry" ]
+        "managed-settings.cli-keys",
+        [ "allowedMcpServers"; "autoTier"; "deniedMcpServers"; "enabledPlugins"; "extraKnownMarketplaces"; "forceLoginOrgs"
+          "forceRemoteSettingsRefresh"; "model"; "permissions"; "policyHelper"; "remoteControl"; "sandbox"; "shellShortcut"
+          "strictKnownMarketplaces"; "telemetry" ]
         "managed-settings.overridable",
         [ "allowedMcpServers"; "autoTier"; "deniedMcpServers"; "extraKnownMarketplaces"; "model"; "permissions.allow"; "permissions.ask"
           "permissions.deny"; "permissions.disableBypassPermissionsMode"; "sandbox"; "strictKnownMarketplaces" ]
@@ -163,6 +167,11 @@ let extract (docsRoot: string) (ghAwRoot: string option) : Snapshot =
     let doc rel = read docsRoot rel |> Option.map (resolve vars) |> Option.defaultValue ""
     let ref' = doc "content/copilot/reference/enterprise-administrators/enterprise-managed-settings.md"
     let keysTable = section ref' "## Supported keys"
+    // The Copilot CLI documents more managed keys (device and server) than the enterprise reference.
+    let cliConfig = doc "content/copilot/reference/copilot-cli-reference/cli-config-dir-reference.md"
+    let cliKeys =
+        let from = cliConfig.IndexOf("## MDM managed settings", StringComparison.Ordinal)
+        if from < 0 then [] else section (cliConfig.Substring from) "### Supported keys" |> firstColumnCodes
     let overrides = doc "content/copilot/how-tos/administer-copilot/manage-for-enterprise/use-managed-settings/override-settings-for-teams.md"
     let overridable =
         let s = section overrides "## Supported keys"
@@ -182,6 +191,7 @@ let extract (docsRoot: string) (ghAwRoot: string option) : Snapshot =
     let tableRows (t: string) = [ for m in Regex.Matches(t, @"(?m)^\|\s*([^|`][^|]*?)\s*\|") -> m.Groups[1].Value.Trim() ] |> List.filter (fun s -> s <> "---" && s <> "Policy name" && s <> "Surface" && not (s.StartsWith "-"))
     Map.ofList [
         "managed-settings.keys", firstColumnCodes keysTable |> List.sort
+        "managed-settings.cli-keys", cliKeys |> List.sort
         "managed-settings.overridable", overridable |> List.sort
         "managed-settings.sandbox", section ref' "## `sandbox`" |> bulletCodes |> List.sort
         "managed-settings.telemetry", section ref' "## telemetry" |> bulletCodes |> List.sort

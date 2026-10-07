@@ -381,7 +381,10 @@ let ``the hook events the DSL models match the drift snapshot`` () =
 
 [<Fact>]
 let ``the documented managed keys are all modelled`` () =
-    Assert.Equal<string list>(Drift.known["managed-settings.keys"] |> List.sort, documented |> List.map fst |> List.sort)
+    let fromReference = Drift.known["managed-settings.keys"]
+    // The CLI table names the groups (permissions, sandbox) the reference lists by sub-key.
+    let cliOnly = Drift.known["managed-settings.cli-keys"] |> List.filter (fun k -> not (fromReference |> List.exists (fun r -> r = k || r.StartsWith(k + "."))))
+    Assert.Equal<string list>(fromReference @ cliOnly |> List.distinct |> List.sort, documented |> List.map fst |> List.filter (fun k -> k <> "effortLevel" && k <> "contextTier") |> List.sort)
 
 // ---------------------------------------------------------------------------
 // Rollout stages and self-protection
@@ -476,3 +479,134 @@ let ``apply_patch edits are matched by the files they touch`` () =
     Assert.DoesNotContain((evaluate guard.Rules wrapped).Matched, fun r -> r.Name = "test-reminder")
     let deny = { (call PreToolUse """{"sessionId":"s","toolName":"apply_patch"}""") with ToolArgs = Some "*** Begin Patch\n*** Add File: config/.env\n+X=1\n*** End Patch" }
     Assert.Equal(Some Deny, (evaluate [ beforeTool "no-env-writes" (writingTo "**/.env") (block "no") ] deny).Decision.Permission)
+
+// ---------------------------------------------------------------------------
+// Every managed-settings key and team rule (enterprise-managed-settings.md, cli-config-dir-reference.md,
+// override-settings-for-teams.md)
+// ---------------------------------------------------------------------------
+
+[<Fact>]
+let ``every CLI managed-settings key renders with the documented name and value`` () =
+    let p =
+        policy {
+            model "auto"
+            effortLevel "high"
+            contextTier LongContext
+            assistedApprovalOnly
+            deny [ powershell "Remove-Item *"; write "//etc/**" ]
+            allow [ read "/**" ]
+            shellShortcut false
+            policyHelper { helperAt "/usr/local/bin/copilot-policy" with Args = [ "--json" ]; TimeoutMs = Some 2000 }
+            onlySignInTo [ "acme" ]
+            alwaysRefreshServerSettings
+            onlyMarketplaces [ urlSourceWithHeaders "https://plugins.acme.example/marketplace.json" [ "Authorization", "Bearer ${TOKEN}" ]; npm "@acme/plugins"; hostPattern "^plugins\\.acme\\.example$" ]
+            marketplaces [ Policy.marketplace "frozen" (Policy.github "acme/frozen") |> neverAutoUpdating ]
+            sandboxed (sandbox { required; learning RecordAndAllow })
+        }
+    let j = toJson p
+    Assert.Equal("allow-auto-only", string (at [ K "permissions"; K "disableBypassPermissionsMode" ] j))
+    Assert.Equal("PowerShell(Remove-Item *)", string (at [ K "permissions"; K "deny"; I 0 ] j))
+    Assert.Equal("Edit(//etc/**)", string (at [ K "permissions"; K "deny"; I 1 ] j))
+    Assert.Equal("high", string j.["effortLevel"])
+    Assert.Equal("long_context", string j.["contextTier"])
+    Assert.False(j.["shellShortcut"].GetValue<bool>())
+    Assert.Equal("--json", string (at [ K "policyHelper"; K "args"; I 0 ] j))
+    Assert.Equal(2000, (at [ K "policyHelper"; K "timeoutMs" ] j).GetValue<int>())
+    Assert.Equal("acme", string (at [ K "forceLoginOrgs"; I 0 ] j))
+    Assert.True(j.["forceRemoteSettingsRefresh"].GetValue<bool>())
+    Assert.Equal("Bearer ${TOKEN}", string (at [ K "strictKnownMarketplaces"; I 0; K "headers"; K "Authorization" ] j))
+    Assert.Equal("npm", string (at [ K "strictKnownMarketplaces"; I 1; K "source" ] j))
+    Assert.Equal("hostPattern", string (at [ K "strictKnownMarketplaces"; I 2; K "source" ] j))
+    Assert.False((at [ K "extraKnownMarketplaces"; K "frozen"; K "autoUpdate" ] j).GetValue<bool>())
+    Assert.Equal("allow", string (at [ K "sandbox"; K "learningMode" ] j))
+    Assert.Empty(validateEnterprise p)
+
+[<Fact>]
+let ``device-only keys never reach the server file, learningMode only reaches native MDM`` () =
+    let p = policy { onlySignInTo [ "acme" ]; sandboxed (sandbox { required; learning RecordAndAllow }) }
+    let server = toJson (forServer p)
+    Assert.Null(server.["forceLoginOrgs"])
+    Assert.Null(at [ K "sandbox"; K "learningMode" ] server)
+    let file = toJson (forFile p)
+    Assert.Equal("acme", string (at [ K "forceLoginOrgs"; I 0 ] file))
+    Assert.Null(at [ K "sandbox"; K "learningMode" ] file)
+    let mdm = Render.mdmValues p |> Map.ofList
+    Assert.Equal("allow", mdm.["sandbox.learningMode"])
+    Assert.Equal("""["acme"]""", mdm.["forceLoginOrgs"])
+
+[<Fact>]
+let ``managed settings validation follows the documented constraints`` () =
+    let problems = validateEnterprise (policy { effortLevel "high"; allowMcp [ serverName "jira*" ]; policyHelper (helperAt "bin/helper") })
+    Assert.Contains(problems, fun m -> m.Contains "effortLevel / contextTier apply alongside a managed model")
+    Assert.Contains(problems, fun m -> m.Contains "serverName 'jira*' may only use letters")
+    Assert.Contains(problems, fun m -> m.Contains "policyHelper.path 'bin/helper'")
+
+[<Fact>]
+let ``teams may only set overridable keys, tighter autoTier and additive plugins`` () =
+    let ent = policy { modelByDefault "auto"; autoTier Balance; effortLevel "medium"; noBypassMode }
+    let problems = validateTeam ent "t" (policy { unmanagedModel; autoTier Intelligence; effortLevel "high"; allowBypassMode })
+    Assert.DoesNotContain(problems, fun m -> m.Contains "'model'")
+    Assert.Contains(problems, fun m -> m.Contains "'autoTier' intelligence is less restrictive")
+    Assert.Contains(problems, fun m -> m.Contains "'effortLevel' is not overridable")
+    Assert.Contains(problems, fun m -> m.Contains "permissions.disableBypassPermissionsMode' is not marked overridable")
+    Assert.Empty(validateTeam ent "t" (policy { autoTier Efficiency; enablePlugins [ "extra@m" ] }))
+
+let private sec = plugin { named "security-tools"; describedAs "AppSec skills." }
+let private withTeams =
+    { sample with
+        Plugins = sample.Plugins @ [ sec ]
+        Policy = { everyone with Marketplaces = Some(Overridable [ Policy.marketplace "community" (Policy.github "acme/community") ]) } }
+    |> fun p ->
+        let teamA = teamOverride { named "payments"; forEnterpriseTeams [ "payments-eng" ]; overriding (policy { denyByDefault [ shell "git push --force *" ]; allowByDefault [ read "/**" ] }); addPlugins [ sec ] }
+        let teamB = teamOverride { named "platform"; forEnterpriseTeams [ "ent:platform-eng" ]; overriding (policy { denyByDefault [ shell "git push --force *"; read "~/.ssh/**" ]; allowByDefault [ read "/**"; edit "/infra/**" ] }) }
+        { p with Teams = [ teamA; teamB ] }
+
+[<Fact>]
+let ``a team's plugins are enabled only in its own file`` () =
+    let rendered = Render.all { withTeams with Teams = withTeams.Teams |> List.map (fun t -> { t with Policy = { t.Policy with Deny = t.Policy.Deny |> Option.map (function Overridable v -> Enforced v | x -> x); Allow = t.Policy.Allow |> Option.map (function Overridable v -> Enforced v | x -> x) } }) } published
+    let get path = JsonNode.Parse(rendered |> List.find (fun f -> f.Path = path) |> _.Content)
+    Assert.Null((get ".github-private/copilot/managed-settings.json").["enabledPlugins"].["security-tools@acme-copilot-plugins"])
+    Assert.True((get ".github-private/copilot/teams/payments.json").["enabledPlugins"].["security-tools@acme-copilot-plugins"].GetValue<bool>())
+    Assert.Null((get ".github-private/copilot/teams/platform.json").["enabledPlugins"])
+
+[<Fact>]
+let ``team files are checked against the documented team rules`` () =
+    let bad =
+        { withTeams with
+            Teams =
+                [ teamOverride { named "x y"; overriding (policy { blockPlugins [ "acme-eng@acme-copilot-plugins" ]; marketplaces [ Policy.marketplace "other" (Policy.github "acme/other") ]; onlyMarketplaces [] }) }
+                  teamOverride { named "dup"; forEnterpriseTeams [ "a" ] }
+                  teamOverride { named "dup"; forEnterpriseTeams [ "b" ] } ] }
+    let problems = validate bad
+    Assert.Contains(problems, fun m -> m.Contains "team x y: the name becomes a file name")
+    Assert.Contains(problems, fun m -> m.Contains "team x y: map it to at least one enterprise team")
+    Assert.Contains(problems, fun m -> m.Contains "cannot turn off a plugin the enterprise enables")
+    Assert.Contains(problems, fun m -> m.Contains "drops 'community'")
+    Assert.Contains(problems, fun m -> m.Contains "complete lockdown")
+    Assert.Contains(problems, fun m -> m.Contains "team dup: defined twice")
+
+[<Fact>]
+let ``a member of several teams gets them combined least-restrictively`` () =
+    let teamA = policy { model "gpt-a"; deny [ shell "git push --force *" ]; allow [ read "/**" ]; autoTier Efficiency; sandboxed (sandbox { required; noOutbound; denyPaths [ "/a"; "/shared" ] }) }
+    let teamB = policy { model "gpt-b"; deny [ shell "git push --force *"; read "~/.ssh/**" ]; allow [ edit "/infra/**" ]; autoTier Intelligence; sandboxed (sandbox { required; denyPaths [ "/shared" ] }) }
+    let combined, warnings = combineTeams [ "a", teamA; "b", teamB ]
+    Assert.Equal(Some(Enforced [ shell "git push --force *" ]), combined.Deny)
+    Assert.Equal(Some(Enforced [ read "/**"; edit "/infra/**" ]), combined.Allow)
+    Assert.Equal(Some(Enforced Intelligence), combined.AutoTier)
+    let s = match combined.Sandbox with Some(Enforced s) -> s | _ -> failwith "sandbox"
+    Assert.Equal(Some true, s.Enabled)
+    Assert.Equal(None, s.AllowOutbound)
+    Assert.Equal<string list>([ "/shared" ], s.DeniedPaths)
+    Assert.Contains(warnings, fun w -> w.Contains "'model' differs between teams a, b")
+    let unmanaged, _ = combineTeams [ "a", policy { noBypassMode }; "b", policy { allowBypassMode } ]
+    Assert.Equal(Some Unmanaged, unmanaged.DisableBypass)
+
+[<Fact>]
+let ``whatif resolves enterprise team slugs with or without ent prefix`` () =
+    let p = { withTeams with Policy = { withTeams.Policy with Deny = Some(Overridable [ shell "rm -rf *" ]); Allow = Some(Overridable [ read "/**" ]) } }
+    let pol, files, _ = effectiveForMember p [ "ent:payments-eng"; "platform-eng" ]
+    Assert.Equal<string list>([ "payments"; "platform" ], files)
+    Assert.Equal(Some(Enforced [ shell "git push --force *" ]), pol.Deny)
+    let none, noFiles, _ = effectiveForMember p [ "unknown" ]
+    Assert.Empty(noFiles)
+    Assert.Equal(Some(Enforced [ shell "rm -rf *" ]), none.Deny)

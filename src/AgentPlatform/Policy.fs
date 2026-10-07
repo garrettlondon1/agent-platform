@@ -15,6 +15,15 @@
 ///     marketplaces  ->  extraKnownMarketplaces
 ///     onlyMarketplaces -> strictKnownMarketplaces             ([] = complete lockdown)
 ///     sandbox       ->  sandbox                               (whole object wrapped when overridable)
+///
+///     docs: content/copilot/reference/copilot-cli-reference/cli-config-dir-reference.md ("MDM managed settings")
+///
+///     effortLevel / contextTier -> effortLevel / contextTier  (applied alongside model)
+///     shellShortcut ->  shellShortcut
+///     policyHelper  ->  policyHelper
+///     forceLoginOrgs ->  forceLoginOrgs                       (device channel only: MDM / managed-settings.json)
+///     forceRemoteSettingsRefresh -> forceRemoteSettingsRefresh
+///     sandbox.learningMode                                    (Windows, native MDM only)
 module AgentPlatform.Policy
 
 open System.Text.Json.Nodes
@@ -44,6 +53,8 @@ let settingValue =
 /// A permission rule. Selector syntax is GitHub's; see the reference for glob roots.
 type PermissionRule =
     | Shell of string
+    /// Same selector family as Shell, matched case-insensitively.
+    | PowerShell of string
     | Read of string
     | Edit of string
     | Domain of string
@@ -51,13 +62,17 @@ type PermissionRule =
     member r.Text =
         match r with
         | Shell s -> $"Shell({s})"
+        | PowerShell s -> $"PowerShell({s})"
         | Read s -> $"Read({s})"
         | Edit s -> $"Edit({s})"
         | Domain s -> $"Domain({s})"
 
 let shell s = Shell s
+let powershell s = PowerShell s
 let read s = Read s
 let edit s = Edit s
+/// `Write(...)` is documented as an alias of `Edit(...)`.
+let write s = Edit s
 let domain s = Domain s
 
 type Tier =
@@ -78,7 +93,32 @@ type Tier =
         | Balance -> 1
         | Intelligence -> 2
 
-type Bypass = | Disable
+/// permissions.disableBypassPermissionsMode values.
+type Bypass =
+    /// No allow-all / YOLO mode at all.
+    | Disable
+    /// Blocks full allow-all escalation but still permits LLM-assisted approval (`/permissions assisted`).
+    | AllowAutoOnly
+
+    member b.Text = match b with Disable -> "disable" | AllowAutoOnly -> "allow-auto-only"
+
+type ContextTier =
+    | DefaultContext
+    | LongContext
+
+    member c.Text = match c with DefaultContext -> "default" | LongContext -> "long_context"
+
+/// A program that supplies the lowest-priority managed-settings layer (registered now; the CLI documents that it
+/// does not invoke helpers yet).
+type PolicyHelper = { Path: string; Args: string list; TimeoutMs: int option; RefreshIntervalMs: int option }
+
+/// `policyHelper (helperAt "/usr/local/bin/copilot-policy")`
+let helperAt path = { Path = path; Args = []; TimeoutMs = None; RefreshIntervalMs = None }
+
+/// sandbox.learningMode (Windows, native MDM only): record what sandboxed commands need instead of denying it.
+type LearningMode =
+    | RecordAndAllow
+    | RecordAndDeny
 
 type McpServer =
     | ServerName of string
@@ -95,7 +135,7 @@ type Source =
     | GitHubRepo of repo: string * ref: string option * path: string option
     | GitUrl of url: string * ref: string option * path: string option
     | Directory of path: string
-    | UrlSource of url: string
+    | UrlSource of url: string * headers: (string * string) list
     | Npm of package: string
     | FileSource of path: string
     | HostPattern of regex: string
@@ -109,6 +149,14 @@ type KnownMarketplace = { Name: string; Source: Source; AutoUpdate: bool option 
 
 let marketplace name source = { Name = name; Source = source; AutoUpdate = None }
 let autoUpdating (m: KnownMarketplace) = { m with AutoUpdate = Some true }
+/// Require automatic updates to stay off for this marketplace (users cannot turn them on).
+let neverAutoUpdating (m: KnownMarketplace) = { m with AutoUpdate = Some false }
+let urlSource url = UrlSource(url, [])
+let urlSourceWithHeaders url headers = UrlSource(url, headers)
+let gitUrl url = GitUrl(url, None, None)
+let npm package = Npm package
+let hostPattern regex = HostPattern regex
+let pathPattern regex = PathPattern regex
 
 type Protocol =
     | HttpJson
@@ -169,6 +217,7 @@ type Sandbox = {
     BlockedHosts: string list
     Proxy: string option
     KeychainAccess: bool option
+    LearningMode: LearningMode option
 }
 
 let private openSandbox: Sandbox = {
@@ -176,7 +225,7 @@ let private openSandbox: Sandbox = {
     SandboxMcpServers = None; SandboxLspServers = None; GitAuth = None; GhAuth = None
     AllowDevToolAccess = None; ReadWritePaths = None; ReadOnlyPaths = None; DeniedPaths = []
     AllowOutbound = None; AllowLocalNetwork = None; AllowedHosts = []; BlockedHosts = []
-    Proxy = None; KeychainAccess = None
+    Proxy = None; KeychainAccess = None; LearningMode = None
 }
 
 /// sandbox { required; failClosed; noBypass; ... }
@@ -200,6 +249,9 @@ type SandboxBuilder() =
     [<CustomOperation "blockHosts">] member _.Block(s: Sandbox, h) = { s with BlockedHosts = h }
     [<CustomOperation "proxy">] member _.Proxy(s: Sandbox, url) = { s with Proxy = Some url }
     [<CustomOperation "noKeychain">] member _.NoKeychain(s: Sandbox) = { s with KeychainAccess = Some false }
+    /// Windows, native MDM only (registry / plist): record and ALLOW what sandboxed commands need, to learn a cohort's
+    /// requirements before locking down. `learning RecordAndDeny` (or omitting it) is the ordinary enforced sandbox.
+    [<CustomOperation "learning">] member _.Learning(s: Sandbox, m: LearningMode) = { s with LearningMode = Some m }
 
 let sandbox = SandboxBuilder()
 
@@ -220,13 +272,20 @@ type Policy = {
     Marketplaces: Setting<KnownMarketplace list> option
     StrictMarketplaces: Setting<Source list> option
     Sandbox: Setting<Sandbox> option
+    EffortLevel: string option
+    ContextTier: ContextTier option
+    ShellShortcut: bool option
+    PolicyHelper: PolicyHelper option
+    ForceLoginOrgs: string list option
+    ForceRemoteSettingsRefresh: bool option
 }
 
 let empty: Policy = {
     ComputerUse = None; Model = None; AutoTier = None; DisableBypass = None
     Deny = None; Ask = None; Allow = None; Telemetry = None; RemoteControl = None
     McpAllow = None; McpDeny = None; EnabledPlugins = []; Marketplaces = None
-    StrictMarketplaces = None; Sandbox = None
+    StrictMarketplaces = None; Sandbox = None; EffortLevel = None; ContextTier = None; ShellShortcut = None
+    PolicyHelper = None; ForceLoginOrgs = None; ForceRemoteSettingsRefresh = None
 }
 
 /// Plain operations ENFORCE a value (`deny [...]`). `...ByDefault` operations set an enterprise
@@ -244,6 +303,20 @@ type PolicyBuilder() =
     [<CustomOperation "noBypassMode">] member _.NoBypass(p: Policy) = { p with DisableBypass = Some(Enforced Disable) }
     [<CustomOperation "noBypassModeByDefault">] member _.NoBypassDefault(p: Policy) = { p with DisableBypass = Some(Overridable Disable) }
     [<CustomOperation "allowBypassMode">] member _.BypassFree(p: Policy) = { p with DisableBypass = Some Unmanaged }
+    /// Block allow-all, but keep LLM-assisted approval (`/permissions assisted`).
+    [<CustomOperation "assistedApprovalOnly">] member _.AutoOnly(p: Policy) = { p with DisableBypass = Some(Enforced AllowAutoOnly) }
+    [<CustomOperation "assistedApprovalOnlyByDefault">] member _.AutoOnlyDefault(p: Policy) = { p with DisableBypass = Some(Overridable AllowAutoOnly) }
+    /// Managed reasoning effort, applied with `model` when the model supports it.
+    [<CustomOperation "effortLevel">] member _.Effort(p: Policy, v: string) = { p with EffortLevel = Some v }
+    /// Managed context tier, applied with `model` when the model supports it.
+    [<CustomOperation "contextTier">] member _.Context(p: Policy, v: ContextTier) = { p with ContextTier = Some v }
+    /// Force the `$` interactive shell shortcut on or off for everyone.
+    [<CustomOperation "shellShortcut">] member _.ShellShortcut(p: Policy, v: bool) = { p with ShellShortcut = Some v }
+    [<CustomOperation "policyHelper">] member _.Helper(p: Policy, v: PolicyHelper) = { p with PolicyHelper = Some v }
+    /// Only accounts in these organizations may sign in. Device channel only (MDM / managed-settings.json); fails closed.
+    [<CustomOperation "onlySignInTo">] member _.ForceLogin(p: Policy, orgs: string list) = { p with ForceLoginOrgs = Some orgs }
+    /// Fetch server-managed settings fresh on every start (the cache stays as a fallback).
+    [<CustomOperation "alwaysRefreshServerSettings">] member _.Refresh(p: Policy) = { p with ForceRemoteSettingsRefresh = Some true }
     [<CustomOperation "deny">] member _.Deny(p: Policy, v: PermissionRule list) = { p with Deny = Some(Enforced v) }
     [<CustomOperation "denyByDefault">] member _.DenyDefault(p: Policy, v: PermissionRule list) = { p with Deny = Some(Overridable v) }
     [<CustomOperation "ask">] member _.Ask(p: Policy, v: PermissionRule list) = { p with Ask = Some(Enforced v) }
@@ -292,7 +365,8 @@ let sourceJson =
     | GitUrl(url, ref, path) ->
         obj [ "source", Some(str "git"); "url", Some(str url); "ref", ref |> Option.map str; "path", path |> Option.map str ]
     | Directory p -> objOf [ "source", str "directory"; "path", str p ]
-    | UrlSource u -> objOf [ "source", str "url"; "url", str u ]
+    | UrlSource(u, headers) ->
+        obj [ "source", Some(str "url"); "url", Some(str u); "headers", (if headers.IsEmpty then None else Some(headers |> List.map (fun (k, v) -> k, str v) |> objOf)) ]
     | Npm p -> objOf [ "source", str "npm"; "package", str p ]
     | FileSource p -> objOf [ "source", str "file"; "path", str p ]
     | HostPattern r -> objOf [ "source", str "hostPattern"; "hostPattern", str r ]
@@ -334,13 +408,14 @@ let private sandboxJson (s: Sandbox) =
         "addCurrentWorkingDirectory", b s.AddCurrentWorkingDirectory; "sandboxMcpServers", b s.SandboxMcpServers
         "sandboxLspServers", b s.SandboxLspServers; "gitAuth", b s.GitAuth; "ghAuth", b s.GhAuth
         "allowDevToolAccess", b s.AllowDevToolAccess; "userPolicy", nonEmpty userPolicy
+        "learningMode", s.LearningMode |> Option.map (function RecordAndAllow -> str "allow" | RecordAndDeny -> str "deny")
     ]
 
 /// The managed-settings.json (or a team file) for a policy.
 let toJson (p: Policy) : JsonNode =
     let permissions =
         obj [
-            "disableBypassPermissionsMode", p.DisableBypass |> Option.map (setting (fun Disable -> str "disable"))
+            "disableBypassPermissionsMode", p.DisableBypass |> Option.map (setting (fun b -> str b.Text))
             "deny", p.Deny |> Option.map (setting rules)
             "ask", p.Ask |> Option.map (setting rules)
             "allow", p.Allow |> Option.map (setting rules)
@@ -363,7 +438,32 @@ let toJson (p: Policy) : JsonNode =
         "extraKnownMarketplaces", p.Marketplaces |> Option.map (setting markets)
         "strictKnownMarketplaces", p.StrictMarketplaces |> Option.map (setting (List.map sourceJson >> arr))
         "sandbox", p.Sandbox |> Option.map (setting sandboxJson)
+        "effortLevel", p.EffortLevel |> Option.map str
+        "contextTier", p.ContextTier |> Option.map (fun c -> str c.Text)
+        "shellShortcut", p.ShellShortcut |> Option.map bool
+        "policyHelper",
+        p.PolicyHelper
+        |> Option.map (fun h ->
+            obj [
+                "path", Some(str h.Path)
+                "args", (if h.Args.IsEmpty then None else Some(strs h.Args))
+                "timeoutMs", h.TimeoutMs |> Option.map num
+                "refreshIntervalMs", h.RefreshIntervalMs |> Option.map num
+            ])
+        "forceLoginOrgs", p.ForceLoginOrgs |> Option.map strs
+        "forceRemoteSettingsRefresh", p.ForceRemoteSettingsRefresh |> Option.map bool
     ]
+
+/// What the server-managed file (.github-private) may carry. forceLoginOrgs must reach a device before its first sign-in,
+/// which the server channel cannot do, and sandbox.learningMode is read only from native MDM.
+let forServer (p: Policy) =
+    let noLearning = Option.map (function Enforced s -> Enforced { s with LearningMode = None } | Overridable s -> Overridable { s with LearningMode = None } | Unmanaged -> Unmanaged)
+    { p with ForceLoginOrgs = None; Sandbox = noLearning p.Sandbox }
+
+/// What a file-based managed-settings.json may carry: everything except sandbox.learningMode (native MDM only).
+let forFile (p: Policy) =
+    let noLearning = Option.map (function Enforced s -> Enforced { s with LearningMode = None } | Overridable s -> Overridable { s with LearningMode = None } | Unmanaged -> Unmanaged)
+    { p with Sandbox = noLearning p.Sandbox }
 
 // ---------------------------------------------------------------------------
 // Team overrides: the rules GitHub's validator applies, checked before you push
@@ -416,6 +516,16 @@ let validateTeam (enterprise: Policy) (teamName: string) (team: Policy) : string
     if team.Telemetry.IsSome then $"{teamName}: 'telemetry' is not overridable for teams."
     if team.RemoteControl.IsSome then $"{teamName}: 'remoteControl' is not overridable for teams."
     if team.ComputerUse.IsSome then $"{teamName}: 'features.computerUse' is not overridable for teams."
+    let notTeam name (isSet: bool) = if isSet then [ $"{teamName}: '{name}' is not overridable for teams (only the keys the reference marks overridable, plus enabledPlugins)." ] else []
+    yield! notTeam "effortLevel" team.EffortLevel.IsSome
+    yield! notTeam "contextTier" team.ContextTier.IsSome
+    yield! notTeam "shellShortcut" team.ShellShortcut.IsSome
+    yield! notTeam "policyHelper" team.PolicyHelper.IsSome
+    yield! notTeam "forceLoginOrgs" team.ForceLoginOrgs.IsSome
+    yield! notTeam "forceRemoteSettingsRefresh" team.ForceRemoteSettingsRefresh.IsSome
+    match team.Sandbox with
+    | Some(Enforced s) when s.LearningMode.IsSome -> $"{teamName}: 'sandbox.learningMode' is read only from native MDM; a team file cannot set it."
+    | _ -> ()
 ]
 
 /// "Paths should be absolute" (enterprise-managed-settings.md, sandbox.userPolicy.filesystem). `~` is only a
@@ -445,6 +555,25 @@ let validateEnterprise (p: Policy) : string list = [
     | _ -> ()
     match p.RemoteControl with
     | Some(RequireSso []) -> "remoteControl: requireSSO needs at least one organization."
+    | _ -> ()
+    if (p.EffortLevel.IsSome || p.ContextTier.IsSome) && p.Model.IsNone then
+        "effortLevel / contextTier apply alongside a managed model; set model (or modelByDefault) too."
+    match p.McpAllow |> Option.bind settingValue with
+    | Some servers ->
+        for s in servers do
+            match s with
+            | ServerName n when not (System.Text.RegularExpressions.Regex.IsMatch(n, "^[A-Za-z0-9_-]+$")) ->
+                $"allowedMcpServers: serverName '{n}' may only use letters, digits, _ and - (no wildcards)."
+            | _ -> ()
+    | None -> ()
+    match p.PolicyHelper with
+    | Some h ->
+        let ok = h.Path.StartsWith "/" || h.Path.StartsWith "~/" || (h.Path.Length > 2 && h.Path[1] = ':') || not (h.Path.Contains "/" || h.Path.Contains "\\")
+        if not ok then $"policyHelper.path '{h.Path}' must be absolute, ~/..., or a bare program name on PATH."
+    | None -> ()
+    match p.ForceLoginOrgs with
+    | Some [] -> ()
+    | Some orgs when orgs |> List.exists System.String.IsNullOrWhiteSpace -> "forceLoginOrgs: organization logins cannot be blank."
     | _ -> ()
     match p.Marketplaces |> Option.bind settingValue with
     | Some ms ->
@@ -496,6 +625,81 @@ let effective (enterprise: Policy) (team: Policy option) : Policy =
                 EnabledPlugins = enterprise.EnabledPlugins @ t.EnabledPlugins |> List.distinctBy fst
         }
 
+/// A member of several enterprise teams: "their team files are combined using the least restrictive value for each key,
+/// then applied beneath the enterprise settings" (override-settings-for-teams.md). Where "least restrictive" is
+/// unambiguous it is computed; where it is not (two different default models, two different proxies) the conflict is
+/// reported and the first team's value is kept, so `whatif` shows it instead of hiding it.
+let combineTeams (teams: (string * Policy) list) : Policy * string list =
+    let warnings = ResizeArray<string>()
+    let names = teams |> List.map fst
+    let values get = teams |> List.choose (fun (_, p) -> get p)
+    // A team file has no "overridable" of its own (validateTeam reports it); its value still counts.
+    let plain vs = vs |> List.choose (function Enforced v | Overridable v -> Some v | Unmanaged -> None)
+    let anyUnmanaged vs = vs |> List.exists (function Unmanaged -> true | _ -> false)
+    let leastBy key get combine =
+        match values get with
+        | [] -> None
+        | vs when anyUnmanaged vs -> Some Unmanaged
+        | vs -> Some(Enforced(combine (plain vs)))
+    let sameOrWarn key (vs: _ list) =
+        match List.distinct vs with
+        | [ v ] -> v
+        | v :: _ ->
+            let joined = System.String.Join(", ", names)
+            warnings.Add $"'{key}' differs between teams {joined}; GitHub combines them least-restrictively, which is ambiguous here - the first team's value is shown."
+            v
+        | [] -> failwith "unreachable"
+    let union (xs: _ list list) = xs |> List.concat |> List.distinct
+    let intersect (xs: _ list list) =
+        match xs with
+        | [] -> []
+        | first :: rest -> first |> List.filter (fun x -> rest |> List.forall (List.contains x))
+    let forceOn (get: Sandbox -> bool option) (ss: Sandbox list) = if ss |> List.forall (fun s -> get s = Some true) then Some true else None
+    let capabilityOff (get: Sandbox -> bool option) (ss: Sandbox list) = if ss |> List.forall (fun s -> get s = Some false) then Some false else None
+    let pathGrant (get: Sandbox -> string list option) (ss: Sandbox list) =
+        if ss |> List.exists (fun s -> (get s).IsNone) then None else Some(union (ss |> List.map (get >> Option.defaultValue [])))
+    let sandboxes (ss: Sandbox list) =
+        { openSandbox with
+            Enabled = forceOn _.Enabled ss
+            FailIfUnavailable = forceOn _.FailIfUnavailable ss
+            SandboxMcpServers = forceOn _.SandboxMcpServers ss
+            SandboxLspServers = forceOn _.SandboxLspServers ss
+            AllowBypass = capabilityOff _.AllowBypass ss
+            AddCurrentWorkingDirectory = capabilityOff _.AddCurrentWorkingDirectory ss
+            GitAuth = capabilityOff _.GitAuth ss
+            GhAuth = capabilityOff _.GhAuth ss
+            AllowDevToolAccess = capabilityOff _.AllowDevToolAccess ss
+            AllowOutbound = capabilityOff _.AllowOutbound ss
+            AllowLocalNetwork = capabilityOff _.AllowLocalNetwork ss
+            KeychainAccess = capabilityOff _.KeychainAccess ss
+            ReadWritePaths = pathGrant _.ReadWritePaths ss
+            ReadOnlyPaths = pathGrant _.ReadOnlyPaths ss
+            DeniedPaths = intersect (ss |> List.map _.DeniedPaths)
+            // A non-empty allowedHosts list restricts; an empty one does not, so any team without one lifts it.
+            AllowedHosts = (if ss |> List.exists (fun s -> s.AllowedHosts.IsEmpty) then [] else union (ss |> List.map _.AllowedHosts))
+            BlockedHosts = intersect (ss |> List.map _.BlockedHosts)
+            Proxy = sameOrWarn "sandbox.userPolicy.network.proxy" (ss |> List.map _.Proxy) }
+    let tierLeast (ts: Tier list) = ts |> List.maxBy _.Rank
+    let combined = {
+        empty with
+            Model = leastBy "model" _.Model (sameOrWarn "model")
+            AutoTier = leastBy "autoTier" _.AutoTier tierLeast
+            // Unmanaged (bypass allowed) is less restrictive than either value; allow-auto-only is less restrictive than disable.
+            DisableBypass = leastBy "permissions.disableBypassPermissionsMode" _.DisableBypass (fun bs -> if List.contains AllowAutoOnly bs then AllowAutoOnly else Disable)
+            Deny = leastBy "permissions.deny" _.Deny intersect
+            Ask = leastBy "permissions.ask" _.Ask intersect
+            Allow = leastBy "permissions.allow" _.Allow union
+            McpAllow = leastBy "allowedMcpServers" _.McpAllow union
+            McpDeny = leastBy "deniedMcpServers" _.McpDeny intersect
+            Marketplaces = leastBy "extraKnownMarketplaces" _.Marketplaces (fun ms -> ms |> List.concat |> List.distinctBy _.Name)
+            StrictMarketplaces = leastBy "strictKnownMarketplaces" _.StrictMarketplaces union
+            Sandbox = leastBy "sandbox" _.Sandbox sandboxes
+            // enabledPlugins is additive in team files; an explicit `true` from any team wins over another team's `false`.
+            EnabledPlugins =
+                teams |> List.collect (snd >> _.EnabledPlugins) |> List.groupBy fst |> List.map (fun (k, vs) -> k, vs |> List.exists snd)
+    }
+    combined, List.ofSeq warnings
+
 /// The keys a policy sets, as dotted names - used to prove coverage of the documented schema.
 let keysOf (p: Policy) =
     let rec walk prefix (n: JsonNode) = [
@@ -529,4 +733,11 @@ let documented = [
     "allowedMcpServers", "CLI VSCode App JetBrains"
     "deniedMcpServers", "CLI VSCode App JetBrains"
     "sandbox", "CLI App"
+    // Documented in the Copilot CLI managed-settings table (cli-config-dir-reference.md), not the enterprise reference.
+    "effortLevel", "CLI"
+    "contextTier", "CLI"
+    "shellShortcut", "CLI"
+    "policyHelper", "CLI"
+    "forceLoginOrgs", "CLI"
+    "forceRemoteSettingsRefresh", "CLI"
 ]
